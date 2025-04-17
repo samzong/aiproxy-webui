@@ -101,7 +101,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { 
@@ -134,6 +134,8 @@ const searchForm = reactive({
 
 // 加载渠道列表
 const loadChannels = async () => {
+  if (loading.value) return // 防止重复加载
+  
   loading.value = true
   try {
     const res = await getChannels({
@@ -341,8 +343,14 @@ const handleCurrentChange = (val) => {
 }
 
 onMounted(() => {
+  // 确保页面加载时立即获取数据
   loadChannels()
   loadChannelTypeNames()
+})
+
+// 当页面从缓存中被激活时也重新加载数据
+onActivated(() => {
+  loadChannels()
 })
 </script>
 

@@ -25,7 +25,7 @@
                 </div>
                 <div class="data-info">
                   <div class="data-title">请求总数</div>
-                  <div class="data-value">{{ dashboardData.totalCount || 0 }}</div>
+                  <div class="data-value">{{ dashboardData.totalCount || dashboardData.total_count || 0 }}</div>
                   <div class="data-trend" v-if="dashboardData.requestCountTrend !== undefined">
                     <span :class="dashboardData.requestCountTrend > 0 ? 'up' : 'down'">
                       <el-icon v-if="dashboardData.requestCountTrend > 0"><ArrowUp /></el-icon>
@@ -45,7 +45,7 @@
                 </div>
                 <div class="data-info">
                   <div class="data-title">异常请求</div>
-                  <div class="data-value">{{ dashboardData.exceptionCount || 0 }}</div>
+                  <div class="data-value">{{ dashboardData.exceptionCount || dashboardData.exception_count || 0 }}</div>
                   <div class="data-trend" v-if="dashboardData.exceptionCountTrend !== undefined">
                     <span :class="dashboardData.exceptionCountTrend > 0 ? 'up-bad' : 'down-good'">
                       <el-icon v-if="dashboardData.exceptionCountTrend > 0"><ArrowUp /></el-icon>
@@ -65,7 +65,7 @@
                 </div>
                 <div class="data-info">
                   <div class="data-title">总Token数</div>
-                  <div class="data-value">{{ formatLargeNumber(dashboardData.totalTokens || 0) }}</div>
+                  <div class="data-value">{{ formatLargeNumber(dashboardData.totalTokens || dashboardData.total_tokens || 0) }}</div>
                   <div class="data-trend" v-if="dashboardData.tokenTrend !== undefined">
                     <span :class="dashboardData.tokenTrend > 0 ? 'up' : 'down'">
                       <el-icon v-if="dashboardData.tokenTrend > 0"><ArrowUp /></el-icon>
@@ -85,7 +85,7 @@
                 </div>
                 <div class="data-info">
                   <div class="data-title">消费金额</div>
-                  <div class="data-value">$ {{ formatNumber(dashboardData.usedAmount || 0) }}</div>
+                  <div class="data-value">$ {{ formatNumber(dashboardData.usedAmount || dashboardData.used_amount || 0) }}</div>
                   <div class="data-trend" v-if="dashboardData.usedAmountTrend !== undefined">
                     <span :class="dashboardData.usedAmountTrend > 0 ? 'up-bad' : 'down-good'">
                       <el-icon v-if="dashboardData.usedAmountTrend > 0"><ArrowUp /></el-icon>
@@ -108,7 +108,7 @@
                 </div>
                 <div class="data-info">
                   <div class="data-title">平均响应时间</div>
-                  <div class="data-value">{{ formatTime(dashboardData.avgResponseTime || 0) }}</div>
+                  <div class="data-value">{{ formatTime(dashboardData.avgResponseTime || dashboardData.avg_response_time || 0) }}</div>
                 </div>
               </div>
             </el-col>
@@ -144,7 +144,7 @@
                 </div>
                 <div class="data-info">
                   <div class="data-title">活跃组数</div>
-                  <div class="data-value">{{ dashboardData.activeGroups || 0 }}</div>
+                  <div class="data-value">{{ dashboardData.activeGroups || dashboardData.active_groups || 0 }}</div>
                 </div>
               </div>
             </el-col>
@@ -238,8 +238,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
-import { getDashboard, getModelCostRank } from '@/api/dashboard'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { 
+  getDashboard, 
+  getModelCostRank, 
+  getDashboardTrends, 
+  getResponseTimeDistribution, 
+  getGroupRequestDistribution, 
+  getModelTrends 
+} from '@/api/dashboard'
 import * as echarts from 'echarts'
 import { ArrowUp, ArrowDown, ChatDotRound, CircleClose, Tickets, Money, Timer, Warning, Stopwatch, UserFilled } from '@element-plus/icons-vue'
 
@@ -291,8 +298,10 @@ const formatTime = (ms) => {
 
 // 计算错误率
 const calculateErrorRate = (data) => {
-  if (!data.totalCount || data.totalCount === 0) return '0.0'
-  return ((data.exceptionCount || 0) / data.totalCount * 100).toFixed(1)
+  const totalCount = data.totalCount || data.total_count || 0
+  const exceptionCount = data.exceptionCount || data.exception_count || 0
+  if (totalCount === 0) return 0
+  return ((exceptionCount / totalCount) * 100).toFixed(2)
 }
 
 // 获取仪表盘数据
@@ -304,28 +313,44 @@ const fetchData = async () => {
     })
     
     if (response && response.data) {
-      // 计算趋势数据（模拟数据，实际应从后端获取）
-      const trendData = {
-        requestCountTrend: Math.random() * 40 - 20, // -20% 到 +20%
-        exceptionCountTrend: Math.random() * 30 - 20, // -20% 到 +10%
-        tokenTrend: Math.random() * 30 - 10, // -10% 到 +20%
-        usedAmountTrend: Math.random() * 30 - 10, // -10% 到 +20%
-        avgResponseTime: Math.floor(Math.random() * 2000) + 500, // 500-2500ms
-        rpm: Math.floor(Math.random() * 100) + 10, // 10-110
-        activeGroups: Math.floor(Math.random() * 20) + 5 // 5-25
+      // 获取真实趋势数据
+      const trendsResponse = await getDashboardTrends({
+        type: timeRange.value
+      })
+      
+      let trendData = {}
+      if (trendsResponse && trendsResponse.data) {
+        trendData = trendsResponse.data
       }
       
-      dashboardData.value = { ...response.data, ...trendData }
-      renderCharts(response.data)
+      // 统一处理字段名不一致的问题
+      const processedData = { 
+        ...response.data,
+        // 确保前端所需的字段名都存在，即使后端返回的是不同命名风格
+        totalCount: response.data.total_count !== undefined ? response.data.total_count : response.data.totalCount,
+        exceptionCount: response.data.exception_count !== undefined ? response.data.exception_count : response.data.exceptionCount,
+        totalTokens: response.data.total_tokens !== undefined ? response.data.total_tokens : response.data.totalTokens,
+        usedAmount: response.data.used_amount !== undefined ? response.data.used_amount : response.data.usedAmount,
+        avgResponseTime: response.data.avg_response_time !== undefined ? response.data.avg_response_time : response.data.avgResponseTime,
+        activeGroups: response.data.active_groups !== undefined ? response.data.active_groups : response.data.activeGroups,
+        // 图表数据统一处理
+        chartData: response.data.chart_data || response.data.chartData || []
+      }
       
-      // 生成响应时间分布数据（模拟数据）
-      generateResponseTimeData()
+      console.log('处理后的仪表盘数据:', processedData)
+      dashboardData.value = { ...processedData, ...trendData }
       
-      // 生成组请求分布数据（模拟数据）
-      generateGroupRequestData()
+      // 渲染图表
+      renderCharts(processedData)
       
-      // 生成模型趋势数据（模拟数据）
-      generateModelTrendData()
+      // 获取响应时间分布数据
+      await fetchResponseTimeData()
+      
+      // 获取组请求分布数据
+      await fetchGroupRequestData()
+      
+      // 获取模型趋势数据
+      await fetchModelTrendData()
     }
     
     // 获取模型成本排名
@@ -357,7 +382,58 @@ const fetchData = async () => {
   }
 }
 
-// 生成响应时间分布数据（模拟）
+// 获取响应时间分布数据
+const fetchResponseTimeData = async () => {
+  try {
+    const res = await getResponseTimeDistribution({
+      type: timeRange.value
+    })
+    
+    if (res && res.data) {
+      responseTimeDistribution.value = res.data
+    }
+  } catch (error) {
+    console.error('获取响应时间分布数据失败:', error)
+    // 如果API还未实现，提供后备模拟数据
+    generateResponseTimeData()
+  }
+}
+
+// 获取组请求分布数据
+const fetchGroupRequestData = async () => {
+  try {
+    const res = await getGroupRequestDistribution({
+      type: timeRange.value
+    })
+    
+    if (res && res.data) {
+      groupRequestData.value = res.data
+    }
+  } catch (error) {
+    console.error('获取组请求分布数据失败:', error)
+    // 如果API还未实现，提供后备模拟数据
+    generateGroupRequestData()
+  }
+}
+
+// 获取模型趋势数据
+const fetchModelTrendData = async () => {
+  try {
+    const res = await getModelTrends({
+      type: timeRange.value
+    })
+    
+    if (res && res.data) {
+      modelTrendData.value = res.data
+    }
+  } catch (error) {
+    console.error('获取模型趋势数据失败:', error)
+    // 如果API还未实现，提供后备模拟数据
+    generateModelTrendData()
+  }
+}
+
+// 生成响应时间分布数据（仅作为API未实现时的后备方案）
 const generateResponseTimeData = () => {
   responseTimeDistribution.value = [
     { range: '0-500ms', count: Math.floor(Math.random() * 1000) + 500 },
@@ -368,7 +444,7 @@ const generateResponseTimeData = () => {
   ]
 }
 
-// 生成组请求分布数据（模拟）
+// 生成组请求分布数据（仅作为API未实现时的后备方案）
 const generateGroupRequestData = () => {
   groupRequestData.value = [
     { name: '产品研发组', value: Math.floor(Math.random() * 1000) + 500 },
@@ -380,7 +456,7 @@ const generateGroupRequestData = () => {
   ]
 }
 
-// 生成模型趋势数据（模拟）
+// 生成模型趋势数据（仅作为API未实现时的后备方案）
 const generateModelTrendData = () => {
   const models = ['GPT-4', 'GPT-3.5', 'DALL-E', 'Claude 2', 'Gemini', 'Llama 2', 'PaLM', 'GLM']
   const timestamps = []
@@ -426,13 +502,20 @@ const generateModelTrendData = () => {
 
 // 渲染图表
 const renderCharts = (data) => {
-  if (!data.chartData) return
+  // 检查图表数据是否存在，兼容chart_data或chartData字段
+  const chartData = data.chart_data || data.chartData || []
+  if (chartData.length === 0) {
+    console.warn('缺少图表数据，无法渲染图表')
+    return
+  }
+  
+  console.log('渲染图表的数据:', chartData)
   
   // 请求趋势图
-  renderRequestChart(data.chartData)
+  renderRequestChart(chartData)
   
   // Token使用情况图
-  renderTokenChart(data.chartData)
+  renderTokenChart(chartData)
 }
 
 // 渲染请求趋势图
@@ -451,8 +534,16 @@ const renderRequestChart = (chartData) => {
     })
   })
   
-  const successData = chartData.map(item => item.requestCount - item.exceptionCount)
-  const errorData = chartData.map(item => item.exceptionCount)
+  // 统一处理字段名不一致问题
+  const successData = chartData.map(item => {
+    const total = item.requestCount !== undefined ? item.requestCount : (item.request_count || 0)
+    const errors = item.exceptionCount !== undefined ? item.exceptionCount : (item.exception_count || 0)
+    return total - errors
+  })
+  
+  const errorData = chartData.map(item => 
+    item.exceptionCount !== undefined ? item.exceptionCount : (item.exception_count || 0)
+  )
   
   const option = {
     tooltip: {
@@ -544,8 +635,14 @@ const renderTokenChart = (chartData) => {
     })
   })
   
-  const inputData = chartData.map(item => item.inputTokens)
-  const outputData = chartData.map(item => item.outputTokens)
+  // 统一处理字段名不一致问题
+  const inputData = chartData.map(item => 
+    item.inputTokens !== undefined ? item.inputTokens : (item.input_tokens || 0)
+  )
+  
+  const outputData = chartData.map(item => 
+    item.outputTokens !== undefined ? item.outputTokens : (item.output_tokens || 0)
+  )
   
   const option = {
     tooltip: {

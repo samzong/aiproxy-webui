@@ -43,6 +43,32 @@ const routes = [
     ]
   },
   {
+    path: '/token',
+    component: () => import('@/layout/index.vue'),
+    redirect: '/token/list',
+    meta: { title: 'Token 管理', icon: 'Key' },
+    children: [
+      {
+        path: 'list',
+        name: 'TokenList',
+        component: () => import('@/views/token/list.vue'),
+        meta: { title: 'Token 列表', icon: 'List' }
+      },
+      {
+        path: 'add',
+        name: 'TokenAdd',
+        component: () => import('@/views/token/add.vue'),
+        meta: { title: '添加Token', icon: 'Plus' }
+      },
+      {
+        path: 'detail/:id',
+        name: 'TokenDetail',
+        component: () => import('@/views/token/detail.vue'),
+        meta: { title: 'Token详情', icon: 'Document', hidden: true }
+      }
+    ]
+  },
+  {
     path: '/group',
     component: () => import('@/layout/index.vue'),
     redirect: '/group/list',
@@ -65,6 +91,12 @@ const routes = [
         name: 'GroupEdit',
         component: () => import('@/views/group/add.vue'),
         meta: { title: '编辑组', icon: 'Edit', hidden: true }
+      },
+      {
+        path: 'model-config/:id',
+        name: 'GroupModelConfig',
+        component: () => import('@/views/group/model-config.vue'),
+        meta: { title: '模型配置', icon: 'Setting', hidden: true }
       }
     ]
   },
@@ -99,6 +131,12 @@ const routes = [
         name: 'LogList',
         component: () => import('@/views/log/list.vue'),
         meta: { title: '日志列表', icon: 'List' }
+      },
+      {
+        path: 'detail/:id',
+        name: 'LogDetail',
+        component: () => import('@/views/log/detail.vue'),
+        meta: { title: '日志详情', icon: 'Document', hidden: true }
       }
     ]
   },

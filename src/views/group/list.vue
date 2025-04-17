@@ -61,9 +61,10 @@
             {{ formatDate(scope.row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="scope">
             <el-button type="primary" link @click="handleEdit(scope.row)">编辑</el-button>
+            <el-button type="success" link @click="handleModelConfig(scope.row)">模型配置</el-button>
             <el-button 
               type="primary" 
               link 
@@ -99,10 +100,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getGroups, updateGroupStatus, deleteGroup, deleteGroups } from '@/api/group'
 import { formatDateTime } from '@/utils'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 状态数据
 const loading = ref(false)
@@ -125,20 +129,39 @@ const pagination = reactive({
 
 // 加载组列表
 const loadGroups = async () => {
+  if (loading.value) return // 防止重复加载
+  
   loading.value = true
   try {
     const params = {
       page: pagination.page,
       size: pagination.size,
-      keyword: searchForm.keyword,
-      status: searchForm.status
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status || undefined
     }
+    
+    // 移除空值
+    Object.keys(params).forEach(key => {
+      if (params[key] === '' || params[key] === undefined) {
+        delete params[key]
+      }
+    })
+    
     const response = await getGroups(params)
-    groups.value = response.data.groups || []
-    pagination.total = response.data.total || 0
+    
+    if (response && response.data) {
+      groups.value = response.data.groups || []
+      pagination.total = response.data.total || 0
+    } else {
+      groups.value = []
+      pagination.total = 0
+      console.error('返回数据格式不正确:', response)
+    }
   } catch (error) {
     console.error('加载组列表失败:', error)
-    ElMessage.error('加载组列表失败')
+    ElMessage.error(`加载组列表失败: ${error.message || '请检查网络或API配置'}`)
+    groups.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -159,14 +182,20 @@ const handleReset = () => {
 
 // 添加组
 const handleAdd = () => {
-  // 跳转到添加页面或打开添加对话框
-  ElMessage.info('跳转到添加组页面')
+  // 跳转到添加页面
+  router.push('/group/add')
 }
 
 // 编辑组
 const handleEdit = (row) => {
-  // 跳转到编辑页面或打开编辑对话框
-  ElMessage.info(`编辑组：${row.id}`)
+  // 跳转到编辑页面
+  router.push(`/group/edit/${row.id}`)
+}
+
+// 进入模型配置
+const handleModelConfig = (row) => {
+  // 跳转到模型配置页面
+  router.push(`/group/model-config/${row.id}`)
 }
 
 // 删除组
@@ -177,12 +206,18 @@ const handleDelete = (row) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await deleteGroup(row.id)
-      ElMessage.success('删除成功')
-      loadGroups()
+      const response = await deleteGroup(row.id)
+      if (response && response.success) {
+        ElMessage.success('删除成功')
+        loadGroups()
+      } else {
+        const errorMsg = response?.message || '删除失败，请检查API响应'
+        ElMessage.error(errorMsg)
+        console.error('删除组失败:', response)
+      }
     } catch (error) {
       console.error('删除组失败:', error)
-      ElMessage.error('删除组失败')
+      ElMessage.error('删除组失败: ' + (error.message || '请检查网络或API配置'))
     }
   }).catch(() => {
     // 取消删除
@@ -203,12 +238,18 @@ const handleBatchDelete = () => {
     type: 'warning'
   }).then(async () => {
     try {
-      await deleteGroups(ids)
-      ElMessage.success('批量删除成功')
-      loadGroups()
+      const response = await deleteGroups(ids)
+      if (response && response.success) {
+        ElMessage.success('批量删除成功')
+        loadGroups()
+      } else {
+        const errorMsg = response?.message || '批量删除失败，请检查API响应'
+        ElMessage.error(errorMsg)
+        console.error('批量删除组失败:', response)
+      }
     } catch (error) {
       console.error('批量删除组失败:', error)
-      ElMessage.error('批量删除组失败')
+      ElMessage.error('批量删除组失败: ' + (error.message || '请检查网络或API配置'))
     }
   }).catch(() => {
     // 取消删除
@@ -226,12 +267,18 @@ const handleToggleStatus = (row) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await updateGroupStatus(row.id, newStatus)
-      ElMessage.success(`${statusText}成功`)
-      loadGroups()
+      const response = await updateGroupStatus(row.id, newStatus)
+      if (response && response.success) {
+        ElMessage.success(`${statusText}成功`)
+        loadGroups()
+      } else {
+        const errorMsg = response?.message || `${statusText}失败，请检查API响应`
+        ElMessage.error(errorMsg)
+        console.error(`${statusText}组失败:`, response)
+      }
     } catch (error) {
       console.error(`${statusText}组失败:`, error)
-      ElMessage.error(`${statusText}组失败`)
+      ElMessage.error(`${statusText}组失败: ` + (error.message || '请检查网络或API配置'))
     }
   }).catch(() => {
     // 取消操作
@@ -262,6 +309,12 @@ const formatDate = (dateStr) => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  // 确保页面加载时立即获取数据
+  loadGroups()
+})
+
+// 当页面从缓存中被激活时也重新加载数据
+onActivated(() => {
   loadGroups()
 })
 </script>

@@ -106,18 +106,26 @@ const getGroupDetail = async (id) => {
   loading.value = true
   try {
     const response = await getGroup(id)
-    const groupData = response.data
-    if (groupData) {
+    if (response && response.success && response.data) {
+      const groupData = response.data
       // 更新表单数据
       Object.keys(form).forEach(key => {
         if (groupData[key] !== undefined) {
           form[key] = groupData[key]
         }
       })
+    } else {
+      const errorMsg = response?.message || '获取组详情失败，无数据返回'
+      ElMessage.error(errorMsg)
+      console.error('获取组详情失败:', response)
+      // 如果获取详情失败，返回列表页
+      setTimeout(() => router.push('/group/list'), 1500)
     }
   } catch (error) {
     console.error('获取组详情失败:', error)
-    ElMessage.error('获取组详情失败')
+    ElMessage.error('获取组详情失败: ' + (error.message || '请检查网络或API配置'))
+    // 如果获取详情失败，返回列表页
+    setTimeout(() => router.push('/group/list'), 1500)
   } finally {
     loading.value = false
   }
@@ -131,12 +139,18 @@ const submitForm = async () => {
     if (valid) {
       loading.value = true
       try {
-        await updateGroup(form.id, form)
-        ElMessage.success('更新组成功')
-        router.push('/group/list')
+        const response = await updateGroup(form.id, form)
+        if (response && response.success) {
+          ElMessage.success('更新组成功')
+          router.push('/group/list')
+        } else {
+          const errorMsg = response?.message || '更新组失败，请检查API响应'
+          ElMessage.error(errorMsg)
+          console.error('更新组失败:', response)
+        }
       } catch (error) {
         console.error('更新组失败:', error)
-        ElMessage.error('更新组失败')
+        ElMessage.error('更新组失败: ' + (error.message || '请检查网络或API配置'))
       } finally {
         loading.value = false
       }

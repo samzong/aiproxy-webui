@@ -44,9 +44,9 @@
         />
       </el-form-item>
 
-      <el-form-item label="可用模型集" prop="available_sets">
+      <el-form-item label="可用模型集" prop="available_set">
         <el-select
-          v-model="groupForm.available_sets"
+          v-model="groupForm.available_set"
           multiple
           filterable
           allow-create
@@ -60,6 +60,20 @@
             :value="item"
           />
         </el-select>
+      </el-form-item>
+      
+      <el-form-item label="余额提醒">
+        <el-switch v-model="groupForm.balance_alert_enabled" />
+      </el-form-item>
+      
+      <el-form-item label="提醒阈值" v-if="groupForm.balance_alert_enabled" prop="balance_alert_threshold">
+        <el-input-number
+          v-model="groupForm.balance_alert_threshold"
+          :min="0"
+          :precision="2"
+          placeholder="请输入提醒阈值"
+        />
+        <span class="form-tip">余额低于此值时发送提醒</span>
       </el-form-item>
 
       <el-form-item>
@@ -75,6 +89,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getGroup, createGroup, updateGroup } from '@/api/group'
+import { getModelConfigs } from '@/api/model'
 
 const route = useRoute()
 const router = useRouter()
@@ -83,8 +98,8 @@ const groupFormRef = ref(null)
 const groupId = computed(() => route.query.groupId)
 const isEdit = computed(() => !!groupId.value)
 
-// 可用的模型集列表（通常需要从API获取）
-const availableModelSets = ref(['gpt-3.5', 'gpt-4', 'llama', 'claude', 'gemini'])
+// 可用的模型集列表
+const availableModelSets = ref([])
 
 // 表单数据
 const groupForm = reactive({
@@ -92,7 +107,9 @@ const groupForm = reactive({
   status: 1,
   rpm_ratio: 1.0,
   tpm_ratio: 1.0,
-  available_sets: []
+  available_set: [],
+  balance_alert_enabled: false,
+  balance_alert_threshold: 0
 })
 
 // 表单验证规则
@@ -109,8 +126,23 @@ const rules = reactive({
   ],
   tpm_ratio: [
     { required: true, message: '请输入TPM比率', trigger: 'blur' }
+  ],
+  balance_alert_threshold: [
+    { type: 'number', min: 0, message: '阈值必须大于等于0', trigger: 'blur' }
   ]
 })
+
+// 获取可用模型列表
+const fetchAvailableModels = async () => {
+  try {
+    const response = await getModelConfigs()
+    if (response && response.data) {
+      availableModelSets.value = response.data.map(model => model.model)
+    }
+  } catch (error) {
+    console.error('获取模型列表失败:', error)
+  }
+}
 
 // 加载组数据（编辑模式）
 const loadGroupData = async () => {
@@ -118,15 +150,21 @@ const loadGroupData = async () => {
   
   try {
     const response = await getGroup(groupId.value)
-    if (response.data && response.data.data) {
-      const groupData = response.data.data
+    if (response && response.data) {
+      const groupData = response.data
       
-      // 更新表单数据
+      // 更新表单数据，处理字段名称差异
       groupForm.id = groupData.id
       groupForm.status = groupData.status
-      groupForm.rpm_ratio = groupData.rpm_ratio || 1.0
-      groupForm.tpm_ratio = groupData.tpm_ratio || 1.0
-      groupForm.available_sets = groupData.available_sets || []
+      groupForm.rpm_ratio = groupData.rpm_ratio !== undefined ? groupData.rpm_ratio : (groupData.rpmRatio || 1.0)
+      groupForm.tpm_ratio = groupData.tpm_ratio !== undefined ? groupData.tpm_ratio : (groupData.tpmRatio || 1.0)
+      groupForm.available_set = groupData.available_sets || groupData.availableSets || []
+      groupForm.balance_alert_enabled = groupData.balance_alert_enabled !== undefined ? 
+        groupData.balance_alert_enabled : (groupData.balanceAlertEnabled || false)
+      groupForm.balance_alert_threshold = groupData.balance_alert_threshold !== undefined ? 
+        groupData.balance_alert_threshold : (groupData.balanceAlertThreshold || 0)
+    } else {
+      ElMessage.error('加载组数据失败: 返回数据格式不正确')
     }
   } catch (error) {
     console.error('加载组数据失败:', error)
@@ -142,10 +180,16 @@ const submitForm = () => {
     try {
       let response
       const submitData = {
-        status: groupForm.status,
         rpm_ratio: groupForm.rpm_ratio,
         tpm_ratio: groupForm.tpm_ratio,
-        available_sets: groupForm.available_sets
+        available_set: groupForm.available_set,
+        balance_alert_enabled: groupForm.balance_alert_enabled,
+        balance_alert_threshold: groupForm.balance_alert_threshold
+      }
+      
+      // 编辑模式下需要包含状态字段
+      if (isEdit.value) {
+        submitData.status = groupForm.status
       }
       
       if (isEdit.value) {
@@ -156,15 +200,17 @@ const submitForm = () => {
         response = await createGroup(groupForm.id, submitData)
       }
       
-      if (response.data && response.data.code === 200) {
-        ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
-        goBack()
-      } else {
-        ElMessage.error(response.data.message || (isEdit.value ? '更新失败' : '创建失败'))
-      }
+      ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
+      goBack()
     } catch (error) {
       console.error(isEdit.value ? '更新组失败:' : '创建组失败:', error)
-      ElMessage.error(isEdit.value ? '更新组失败' : '创建组失败')
+      ElMessage.error(error.message || (isEdit.value ? '更新组失败' : '创建组失败'))
+      
+      // 打印详细错误信息以便调试
+      if (error.response) {
+        console.error('响应状态:', error.response.status)
+        console.error('响应数据:', error.response.data)
+      }
     }
   })
 }
@@ -185,9 +231,10 @@ const goBack = () => {
   router.push('/group/list')
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchAvailableModels()
   if (isEdit.value) {
-    loadGroupData()
+    await loadGroupData()
   }
 })
 </script>
@@ -205,6 +252,12 @@ onMounted(() => {
 }
 
 .group-form {
-  max-width: 700px;
+  max-width: 800px;
+}
+
+.form-tip {
+  margin-left: 10px;
+  color: #909399;
+  font-size: 12px;
 }
 </style> 

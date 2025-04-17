@@ -25,7 +25,11 @@
           <el-option label="OpenAI" value="openai" />
           <el-option label="Anthropic" value="anthropic" />
           <el-option label="Google" value="google" />
+          <el-option label="Azure" value="azure" />
+          <el-option label="Baidu" value="baidu" />
+          <el-option label="ZhiPu" value="zhipu" />
           <el-option label="Local" value="local" />
+          <el-option label="Other" value="other" />
         </el-select>
       </el-form-item>
       
@@ -36,6 +40,7 @@
           <el-option label="插件" :value="2" />
           <el-option label="图像" :value="3" />
           <el-option label="嵌入" :value="4" />
+          <el-option label="音频" :value="5" />
         </el-select>
       </el-form-item>
       
@@ -62,6 +67,28 @@
         />
         <span class="form-help">每1K tokens的价格（美元）</span>
       </el-form-item>
+      
+      <template v-if="modelForm.type === 3">
+        <el-form-item label="图像价格">
+          <el-card class="image-price-card">
+            <div v-for="size in imageSizes" :key="size" class="image-price-item">
+              <span class="image-size-label">{{ size }}</span>
+              <el-input-number 
+                v-model="imagePrice[size]" 
+                :min="0" 
+                :precision="4" 
+                :step="0.0001" 
+                placeholder="价格"
+                @change="updateImagePrices"
+              />
+              <span class="form-help">美元/张</span>
+            </div>
+            <div class="add-size-btn">
+              <el-button type="primary" link @click="addImageSize">添加尺寸</el-button>
+            </div>
+          </el-card>
+        </el-form-item>
+      </template>
       
       <el-divider content-position="left">限制设置</el-divider>
       
@@ -94,13 +121,81 @@
         <span class="form-help">是否从系统测试中排除此模型</span>
       </el-form-item>
       
+      <el-divider content-position="left">能力配置</el-divider>
+      
+      <el-form-item label="支持视觉">
+        <el-switch 
+          v-model="visionSupport" 
+          @change="updateConfigField('vision', $event)"
+        />
+        <span class="form-help">模型是否支持图像输入/多模态</span>
+      </el-form-item>
+      
+      <el-form-item label="支持工具调用">
+        <el-switch 
+          v-model="toolChoiceSupport"
+          @change="updateConfigField('tool_choice', $event)" 
+        />
+        <span class="form-help">模型是否支持函数/工具调用</span>
+      </el-form-item>
+      
+      <el-form-item label="上下文长度">
+        <el-input-number
+          v-model="maxContextTokens"
+          :min="0"
+          :step="1024"
+          placeholder="最大上下文长度"
+          @change="updateConfigField('max_context_tokens', $event)"
+        />
+        <span class="form-help">模型支持的最大上下文长度（tokens）</span>
+      </el-form-item>
+      
+      <el-form-item label="输入长度">
+        <el-input-number
+          v-model="maxInputTokens"
+          :min="0"
+          :step="1024"
+          placeholder="最大输入长度"
+          @change="updateConfigField('max_input_tokens', $event)"
+        />
+        <span class="form-help">模型支持的最大输入长度（tokens）</span>
+      </el-form-item>
+      
+      <el-form-item label="输出长度">
+        <el-input-number
+          v-model="maxOutputTokens"
+          :min="0"
+          :step="1024"
+          placeholder="最大输出长度"
+          @change="updateConfigField('max_output_tokens', $event)"
+        />
+        <span class="form-help">模型支持的最大输出长度（tokens）</span>
+      </el-form-item>
+      
+      <el-form-item label="支持格式">
+        <el-select
+          v-model="supportFormats"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          placeholder="支持的响应格式"
+          @change="updateConfigField('support_formats', $event)"
+        >
+          <el-option label="text" value="text" />
+          <el-option label="json" value="json" />
+          <el-option label="markdown" value="markdown" />
+        </el-select>
+        <span class="form-help">模型支持的响应格式</span>
+      </el-form-item>
+      
       <el-divider content-position="left">高级设置</el-divider>
       
-      <el-form-item label="配置">
+      <el-form-item label="配置JSON">
         <el-input
           v-model="configJson"
           type="textarea"
-          rows="4"
+          rows="6"
           placeholder="请输入模型配置（JSON格式）"
         />
         <span class="form-help">可选配置项，JSON格式</span>
@@ -118,7 +213,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getModelConfig, saveModelConfig } from '@/api/model'
 
 const route = useRoute()
@@ -127,6 +222,22 @@ const formRef = ref(null)
 const loading = ref(false)
 const submitting = ref(false)
 const configJson = ref('{}')
+
+// 支持的图像尺寸和价格
+const imageSizes = ref(['256x256', '512x512', '1024x1024'])
+const imagePrice = reactive({
+  '256x256': 0,
+  '512x512': 0,
+  '1024x1024': 0
+})
+
+// 能力配置字段
+const visionSupport = ref(false)
+const toolChoiceSupport = ref(false)
+const maxContextTokens = ref(0)
+const maxInputTokens = ref(0)
+const maxOutputTokens = ref(0)
+const supportFormats = ref([])
 
 // 判断是否为编辑模式
 const modelName = computed(() => route.query.model || '')
@@ -144,6 +255,7 @@ const modelForm = reactive({
     input_price: 0,
     output_price: 0
   },
+  image_prices: {},
   config: {}
 })
 
@@ -165,11 +277,77 @@ const rules = {
 watch(configJson, (newVal) => {
   try {
     modelForm.config = JSON.parse(newVal)
+    
+    // 更新辅助字段
+    updateHelperFields()
   } catch (error) {
     // JSON解析错误，不更新config
     console.error('无效的JSON格式', error)
   }
 })
+
+// 更新辅助字段
+const updateHelperFields = () => {
+  const config = modelForm.config
+  
+  // 视觉支持
+  visionSupport.value = config.vision || false
+  
+  // 工具调用支持
+  toolChoiceSupport.value = config.tool_choice || false
+  
+  // 上下文长度
+  maxContextTokens.value = config.max_context_tokens || 0
+  
+  // 输入长度
+  maxInputTokens.value = config.max_input_tokens || 0
+  
+  // 输出长度
+  maxOutputTokens.value = config.max_output_tokens || 0
+  
+  // 支持的格式
+  supportFormats.value = config.support_formats || []
+}
+
+// 更新配置字段
+const updateConfigField = (key, value) => {
+  try {
+    const config = JSON.parse(configJson.value)
+    config[key] = value
+    configJson.value = JSON.stringify(config, null, 2)
+    modelForm.config = config
+  } catch (error) {
+    console.error('更新配置字段失败', error)
+  }
+}
+
+// 更新图像价格
+const updateImagePrices = () => {
+  const prices = {}
+  for (const size in imagePrice) {
+    if (imagePrice[size] > 0) {
+      prices[size] = imagePrice[size]
+    }
+  }
+  modelForm.image_prices = prices
+}
+
+// 添加图像尺寸
+const addImageSize = () => {
+  ElMessageBox.prompt('请输入图像尺寸（如 1024x1024）', '添加尺寸', {
+    confirmButtonText: '确认',
+    cancelButtonText: '取消',
+    inputPattern: /^[0-9]+x[0-9]+$/,
+    inputErrorMessage: '格式不正确，请使用如 1024x1024 的格式'
+  }).then(({ value }) => {
+    if (!imageSizes.value.includes(value)) {
+      imageSizes.value.push(value)
+      imagePrice[value] = 0
+    } else {
+      ElMessage.warning('该尺寸已存在')
+    }
+  }).catch(() => {})
+}
 
 // 加载模型详情（编辑模式）
 const loadModelDetail = async () => {
@@ -190,8 +368,26 @@ const loadModelDetail = async () => {
         input_price: data.price?.input_price || 0,
         output_price: data.price?.output_price || 0
       }
+      
+      // 设置图像价格
+      if (data.image_prices) {
+        modelForm.image_prices = data.image_prices
+        
+        // 更新imagePrice辅助对象
+        for (const size in data.image_prices) {
+          if (!imageSizes.value.includes(size)) {
+            imageSizes.value.push(size)
+          }
+          imagePrice[size] = data.image_prices[size]
+        }
+      }
+      
+      // 设置配置
       modelForm.config = data.config || {}
       configJson.value = JSON.stringify(data.config || {}, null, 2)
+      
+      // 更新辅助字段
+      updateHelperFields()
     }
   } catch (error) {
     ElMessage.error('获取模型详情失败')
@@ -217,6 +413,10 @@ const submitForm = async () => {
           modelForm.config = {}
         }
         
+        // 更新图像价格
+        updateImagePrices()
+        
+        // 发送请求
         await saveModelConfig(modelForm)
         ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
         goBack()
@@ -241,6 +441,19 @@ const resetForm = () => {
     loadModelDetail()
   } else {
     configJson.value = '{}'
+    // 重置辅助字段
+    visionSupport.value = false
+    toolChoiceSupport.value = false
+    maxContextTokens.value = 0
+    maxInputTokens.value = 0
+    maxOutputTokens.value = 0
+    supportFormats.value = []
+    
+    // 重置图像价格
+    for (const size in imagePrice) {
+      imagePrice[size] = 0
+    }
+    modelForm.image_prices = {}
   }
 }
 
@@ -277,5 +490,25 @@ onMounted(() => {
 
 .el-divider {
   margin: 24px 0;
+}
+
+.image-price-card {
+  width: 100%;
+  padding: 10px;
+}
+
+.image-price-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.image-size-label {
+  width: 100px;
+  margin-right: 10px;
+}
+
+.add-size-btn {
+  margin-top: 10px;
 }
 </style>

@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { isExternal } from '@/utils/validate'
 import AppLink from './Link.vue'
 import path from 'path-browserify'
