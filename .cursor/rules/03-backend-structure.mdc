@@ -1,0 +1,40 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# AIProxy Backend Structure
+
+AIProxy is a next-generation AI gateway, using OpenAI as the protocol entry point. The backend code is located in the [aiproxy/core](mdc:aiproxy/core) directory. **Note: This code comes from another repository and should not be modified**.
+
+## Main Components
+
+- **Main Entry**: [main.go](mdc:aiproxy/core/main.go)
+- **Controllers**: The [controller](mdc:aiproxy/core/controller) directory contains API handling logic
+- **Routers**: The [router](mdc:aiproxy/core/router) directory defines API routes
+- **Relay**: The [relay](mdc:aiproxy/core/relay) directory handles relaying requests to upstream services
+- **Models**: The [model](mdc:aiproxy/core/model) directory contains data model definitions
+- **Middleware**: The [middleware](mdc:aiproxy/core/middleware) directory contains HTTP middleware
+- **Monitoring**: The [monitor](mdc:aiproxy/core/monitor) directory contains monitoring-related code
+- **Common Functions**: The [common](mdc:aiproxy/core/common) directory contains common utility functions
+
+## Main API Controllers
+
+- **Channel Controller**: [channel.go](mdc:aiproxy/core/controller/channel.go)
+- **Group Controller**: [group.go](mdc:aiproxy/core/controller/group.go)
+- **Model Controller**: [model.go](mdc:aiproxy/core/controller/model.go)
+- **Log Controller**: [log.go](mdc:aiproxy/core/controller/log.go)
+- **Relay Controller**: [relay.go](mdc:aiproxy/core/controller/relay.go)
+- **Token Controller**: [token.go](mdc:aiproxy/core/controller/token.go)
+- **Dashboard Controller**: [dashboard.go](mdc:aiproxy/core/controller/dashboard.go)
+
+## Features
+
+- Intelligent error retry
+- Channel selection based on priority and error rate
+- Alert notification functionality
+- Logging and auditing functionality 
+- Data statistics and analysis
+- Multi-tenant system separation
+- Model RPM TPM limits
+- Complete Swagger API documentation support

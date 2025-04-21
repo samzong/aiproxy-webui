@@ -1,0 +1,30 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Frontend-Backend API Interaction
+
+The WebUI interacts with the AIProxy backend through RESTful APIs.
+
+## API Proxy Configuration
+
+API proxying is configured in [vue.config.js](mdc:vue.config.js), forwarding requests to the backend service:
+
+- `/api/*` - Management APIs
+- `/v1/*` - Relay APIs
+
+## Main API Modules
+
+Frontend API modules are located in the [src/api](mdc:src/api) directory:
+
+- **Channel Management**: [channel.js](mdc:src/api/channel.js) - Interacts with backend [Channel Controller](mdc:aiproxy/core/controller/channel.go)
+- **Group Management**: [group.js](mdc:src/api/group.js) - Interacts with backend [Group Controller](mdc:aiproxy/core/controller/group.go)
+- **Token Management**: [token.js](mdc:src/api/token.js) - Interacts with backend [Token Controller](mdc:aiproxy/core/controller/token.go)
+- **Dashboard**: [dashboard.js](mdc:src/api/dashboard.js) - Interacts with backend [Dashboard Controller](mdc:aiproxy/core/controller/dashboard.go)
+- **Log Query**: [log.js](mdc:src/api/log.js) - Interacts with backend [Log Controller](mdc:aiproxy/core/controller/log.go)
+- **Model Configuration**: [model.js](mdc:src/api/model.js) - Interacts with backend [Model Controller](mdc:aiproxy/core/controller/model.go)
+
+## Authentication
+
+WebUI uses an Admin Key for authentication, which should match the `ADMIN_KEY` environment variable configured in the backend. The token obtained after authentication is used in the Authorization header for subsequent API requests.

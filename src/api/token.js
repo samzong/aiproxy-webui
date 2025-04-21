@@ -190,4 +190,16 @@ export function searchGroupTokens(group, params) {
     method: 'get',
     params
   })
+}
+
+/**
+ * 重置 Token 使用量
+ * @param {number} id - Token ID
+ * @returns {Promise}
+ */
+export function resetTokenUsedQuota(id) {
+  return request({
+    url: `/api/tokens/${id}/reset_used_quota`,
+    method: 'post'
+  })
 } 

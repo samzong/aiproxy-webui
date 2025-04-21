@@ -166,7 +166,7 @@ export function updateGroupRPMRatio(groupId, rpmRatio) {
  */
 export function getGroupModelConfigs(group) {
   return request({
-    url: `/api/group/${group}/model_configs/`,
+    url: `/api/group/${group}/model_config/`,
     method: 'get'
   })
 }
@@ -221,7 +221,7 @@ export function updateGroupModelConfig(group, model, data) {
  */
 export function saveGroupModelConfigs(group, data) {
   return request({
-    url: `/api/group/${group}/model_configs/`,
+    url: `/api/group/${group}/model_config/`,
     method: 'post',
     data
   })
@@ -235,7 +235,7 @@ export function saveGroupModelConfigs(group, data) {
  */
 export function updateGroupModelConfigs(group, data) {
   return request({
-    url: `/api/group/${group}/model_configs/`,
+    url: `/api/group/${group}/model_config/`,
     method: 'put',
     data
   })
@@ -262,7 +262,7 @@ export function deleteGroupModelConfig(group, model) {
  */
 export function deleteGroupModelConfigs(group, models) {
   return request({
-    url: `/api/group/${group}/model_configs/`,
+    url: `/api/group/${group}/model_config/`,
     method: 'delete',
     data: models
   })

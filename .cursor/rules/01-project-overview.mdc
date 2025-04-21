@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# WebUI for AIProxy - Project Overview
+
+This project provides a Web management interface for the [AIProxy](mdc:aiproxy/core/README.md) backend service. WebUI is built with Vue 3 and Element Plus, offering a comprehensive management interface for managing and monitoring the AI Proxy service.
+
+## Main Project Components
+
+- **Frontend**: The [src](mdc:src) directory contains all frontend code
+- **Backend**: The [aiproxy/core](mdc:aiproxy/core) directory contains all backend code (from another repository, do not modify)
+
+## Main Features
+
+- Administrator authentication and login
+- Dashboard data visualization
+- Channel management
+- Group management
+- Model configuration
+- Log viewing
+- Monitoring management
+
+## Development Guide
+
+Detailed development guidelines can be found in [DEVELOPMENT.md](mdc:DEVELOPMENT.md).
+
+## Project Configuration
+
+WebUI configures API proxying through the Vue configuration file [vue.config.js](mdc:vue.config.js), forwarding requests to the backend service.

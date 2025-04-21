@@ -3,19 +3,33 @@
     <div class="token-header">
       <h1>Token 管理</h1>
       <div class="token-actions">
-        <el-button type="primary" @click="navigateToAdd">添加 Token</el-button>
-        <el-button type="danger" :disabled="selectedTokens.length === 0" @click="batchDeleteTokens">批量删除</el-button>
-        <el-button type="primary" @click="refreshTokens">刷新</el-button>
+        <el-button type="primary" icon="Plus" @click="openTokenDialog(false)">添加 Token</el-button>
+        <el-button type="danger" icon="Delete" :disabled="selectedTokens.length === 0" @click="batchDeleteTokens">批量删除</el-button>
+        <el-dropdown split-button type="primary" @command="handleCommand">
+          更多操作
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="refresh" icon="Refresh">刷新列表</el-dropdown-item>
+              <el-dropdown-item command="exportTokens" icon="Download">导出数据</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
     
     <div class="token-search">
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="搜索 Token" clearable @keyup.enter="searchTokens" />
+          <el-input 
+            v-model="searchForm.keyword" 
+            placeholder="搜索名称/ID/密钥" 
+            clearable 
+            prefix-icon="Search"
+            @keyup.enter="searchTokens" 
+          />
         </el-form-item>
         <el-form-item label="分组">
-          <el-select v-model="searchForm.group" placeholder="选择分组" clearable>
+          <el-select v-model="searchForm.group" placeholder="所有分组" clearable style="width: 160px;">
             <el-option
               v-for="group in groups"
               :key="group.id"
@@ -25,14 +39,24 @@
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="选择状态" clearable>
-            <el-option :key="1" label="启用" :value="1" />
-            <el-option :key="2" label="禁用" :value="2" />
+          <el-select v-model="searchForm.status" placeholder="所有状态" clearable style="width: 120px;">
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="2" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-select v-model="searchForm.order" placeholder="默认排序" clearable style="width: 150px;">
+            <el-option label="ID升序" value="id-asc" />
+            <el-option label="ID降序" value="id-desc" />
+            <el-option label="创建时间升序" value="created_at-asc" />
+            <el-option label="创建时间降序" value="created_at-desc" />
+            <el-option label="配额升序" value="quota-asc" />
+            <el-option label="配额降序" value="quota-desc" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="searchTokens">搜索</el-button>
-          <el-button @click="resetSearch">重置</el-button>
+          <el-button type="primary" icon="Search" @click="searchTokens">搜索</el-button>
+          <el-button icon="RefreshRight" @click="resetSearch">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -42,45 +66,52 @@
       :data="tokens"
       style="width: 100%"
       @selection-change="handleSelectionChange"
+      border
+      stripe
+      highlight-current-row
+      ref="tokenTable"
     >
       <el-table-column type="selection" width="55" />
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="名称" min-width="120" />
+      <el-table-column prop="id" label="ID" width="80" sortable />
+      <el-table-column prop="name" label="名称" min-width="120" show-overflow-tooltip />
       <el-table-column prop="key" label="密钥" min-width="220" show-overflow-tooltip />
       <el-table-column prop="group_id" label="分组" min-width="120" />
       <el-table-column label="模型限制" min-width="150" show-overflow-tooltip>
         <template #default="scope">
           <template v-if="scope.row.models && scope.row.models.length">
-            <el-tag type="info" v-for="model in scope.row.models" :key="model" class="model-tag">
-              {{ model }}
-            </el-tag>
+            <el-tooltip effect="dark" :content="scope.row.models.join(', ')" placement="top">
+              <el-badge :value="scope.row.models.length" type="info" />
+            </el-tooltip>
           </template>
           <span v-else>无限制</span>
         </template>
       </el-table-column>
-      <el-table-column label="子网限制" min-width="150" show-overflow-tooltip>
+      <el-table-column label="子网限制" min-width="120" show-overflow-tooltip>
         <template #default="scope">
           <template v-if="scope.row.subnets && scope.row.subnets.length">
-            <el-tag type="info" v-for="subnet in scope.row.subnets" :key="subnet" class="subnet-tag">
-              {{ subnet }}
-            </el-tag>
+            <el-tooltip effect="dark" :content="scope.row.subnets.join(', ')" placement="top">
+              <el-badge :value="scope.row.subnets.length" type="info" />
+            </el-tooltip>
           </template>
           <span v-else>无限制</span>
         </template>
       </el-table-column>
       <el-table-column label="配额" width="100">
         <template #default="scope">
-          <span>{{ scope.row.quota ? scope.row.quota.toFixed(2) : '无限制' }}</span>
+          <span>{{ scope.row.quota ? `$${scope.row.quota.toFixed(2)}` : '无限制' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="100">
+      <el-table-column label="状态" width="100" :filters="[
+        { text: '启用', value: 1 },
+        { text: '禁用', value: 2 }
+      ]" :filter-method="filterStatus" filter-placement="bottom">
         <template #default="scope">
           <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
             {{ scope.row.status === 1 ? '启用' : '禁用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="180">
+      <el-table-column label="创建时间" width="180" sortable>
         <template #default="scope">
           {{ formatDate(scope.row.created_at) }}
         </template>
@@ -90,23 +121,31 @@
           {{ scope.row.expired_at ? formatDate(scope.row.expired_at) : '永不过期' }}
         </template>
       </el-table-column>
-      <el-table-column label="最后访问" width="180">
-        <template #default="scope">
-          {{ scope.row.accessed_at ? formatDate(scope.row.accessed_at) : '从未访问' }}
-        </template>
-      </el-table-column>
       <el-table-column label="操作" fixed="right" width="220">
         <template #default="scope">
-          <el-button size="small" type="primary" @click="viewTokenDetail(scope.row)">详情</el-button>
-          <el-button size="small" type="primary" @click="navigateToEdit(scope.row)">编辑</el-button>
-          <el-button 
-            size="small" 
-            :type="scope.row.status === 1 ? 'danger' : 'success'"
-            @click="toggleTokenStatus(scope.row)"
-          >
-            {{ scope.row.status === 1 ? '禁用' : '启用' }}
-          </el-button>
-          <el-button size="small" type="danger" @click="deleteToken(scope.row)">删除</el-button>
+          <el-button-group>
+            <el-button size="small" type="primary" @click="viewTokenDetail(scope.row)" title="详情">
+              <el-icon><Document /></el-icon>
+            </el-button>
+            <el-button size="small" type="primary" @click="openTokenDialog(true, scope.row)" title="编辑">
+              <el-icon><Edit /></el-icon>
+            </el-button>
+            <el-button 
+              size="small" 
+              :type="scope.row.status === 1 ? 'danger' : 'success'"
+              @click="toggleTokenStatus(scope.row)"
+              :title="scope.row.status === 1 ? '禁用' : '启用'"
+            >
+              <el-icon v-if="scope.row.status === 1"><Close /></el-icon>
+              <el-icon v-else><Check /></el-icon>
+            </el-button>
+            <el-button size="small" type="warning" @click="viewTokenDetail(scope.row)" title="配额管理">
+              <el-icon><Money /></el-icon>
+            </el-button>
+            <el-button size="small" type="danger" @click="deleteToken(scope.row)" title="删除">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-button-group>
         </template>
       </el-table-column>
     </el-table>
@@ -124,73 +163,12 @@
     </div>
 
     <!-- Token 表单对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑 Token' : '添加 Token'"
-      width="600px"
-      destroy-on-close
-    >
-      <el-form :model="tokenForm" label-width="100px" :rules="rules" ref="tokenFormRef">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="tokenForm.name" placeholder="请输入 Token 名称" />
-        </el-form-item>
-        <el-form-item label="分组" prop="group_id">
-          <el-select v-model="tokenForm.group_id" placeholder="选择分组" style="width: 100%">
-            <el-option
-              v-for="group in groups"
-              :key="group.id"
-              :label="group.id"
-              :value="group.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="模型限制">
-          <el-select
-            v-model="tokenForm.models"
-            multiple
-            filterable
-            allow-create
-            placeholder="选择允许访问的模型，不选则不限制"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="model in availableModels"
-              :key="model"
-              :label="model"
-              :value="model"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="子网限制">
-          <el-select
-            v-model="tokenForm.subnets"
-            multiple
-            filterable
-            allow-create
-            placeholder="输入允许访问的子网地址，如 192.168.1.0/24，不填则不限制"
-            style="width: 100%"
-          >
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配额">
-          <el-input-number v-model="tokenForm.quota" :min="0" :precision="2" :step="10" placeholder="Token 配额，0 表示无限制" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="过期时间">
-          <el-date-picker
-            v-model="tokenForm.expiredAt"
-            type="datetime"
-            placeholder="选择过期时间，不选则永不过期"
-            style="width: 100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitForm" :loading="submitLoading">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
+    <TokenFormDialog
+      v-model:visible="dialogVisible"
+      :token="currentToken"
+      :isEdit="isEdit"
+      @success="handleDialogSuccess"
+    />
   </div>
 </template>
 
@@ -207,9 +185,12 @@ import {
   deleteTokens as apiDeleteTokens,
   updateTokenStatus as apiUpdateTokenStatus,
   searchTokens as apiSearchTokens,
+  deleteGroupToken
 } from '@/api/token'
 import { getGroups } from '@/api/group'
 import { getAllModelConfigs } from '@/api/model'
+import TokenFormDialog from './TokenFormDialog.vue'
+import { Plus, Delete, Refresh, Check, Money, Download, Search, RefreshRight, Edit, Close, Document } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -223,7 +204,7 @@ const pageSize = ref(10)
 const selectedTokens = ref([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
-const tokenFormRef = ref(null)
+const tokenTable = ref(null)
 const groups = ref([])
 const availableModels = ref([])
 
@@ -242,18 +223,11 @@ const searchForm = reactive({
   keyword: '',
   group: '',
   status: '',
+  order: ''
 })
 
-// 表单验证规则
-const rules = {
-  name: [
-    { required: true, message: '请输入 Token 名称', trigger: 'blur' },
-    { max: 30, message: 'Token 名称不能超过 30 个字符', trigger: 'blur' }
-  ],
-  group_id: [
-    { required: true, message: '请选择分组', trigger: 'change' }
-  ],
-}
+// 当前编辑的Token
+const currentToken = ref({})
 
 // 加载 Token 列表
 const loadTokens = async () => {
@@ -321,6 +295,7 @@ const buildSearchParams = () => {
   if (searchForm.keyword) params.keyword = searchForm.keyword
   if (searchForm.group) params.group = searchForm.group
   if (searchForm.status) params.status = searchForm.status
+  if (searchForm.order) params.order = searchForm.order
   return params
 }
 
@@ -343,14 +318,11 @@ const refreshTokens = () => {
   loadTokens()
 }
 
-// 显示添加对话框
-const navigateToAdd = () => {
-  router.push('/token/add')
-}
-
-// 编辑 Token - 跳转到编辑页面
-const navigateToEdit = (token) => {
-  router.push(`/token/add?id=${token.id}`)
+// 打开Token对话框
+const openTokenDialog = (isEditMode, token = {}) => {
+  isEdit.value = isEditMode
+  currentToken.value = token
+  dialogVisible.value = true
 }
 
 // 查看Token详情
@@ -358,40 +330,9 @@ const viewTokenDetail = (token) => {
   router.push(`/token/detail/${token.id}`)
 }
 
-// 提交表单
-const submitForm = async () => {
-  if (!tokenFormRef.value) return
-  
-  await tokenFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    
-    submitLoading.value = true
-    try {
-      const data = {
-        name: tokenForm.name,
-        models: tokenForm.models,
-        subnets: tokenForm.subnets,
-        quota: tokenForm.quota,
-        expiredAt: tokenForm.expiredAt ? tokenForm.expiredAt.getTime() : 0
-      }
-      
-      if (isEdit.value) {
-        await updateGroupToken(tokenForm.group_id, tokenForm.id, data)
-        ElMessage.success('Token 更新成功')
-      } else {
-        await addGroupToken(tokenForm.group_id, data)
-        ElMessage.success('Token 添加成功')
-      }
-      
-      dialogVisible.value = false
-      loadTokens()
-    } catch (error) {
-      ElMessage.error(isEdit.value ? 'Token 更新失败' : 'Token 添加失败')
-      console.error(error)
-    } finally {
-      submitLoading.value = false
-    }
-  })
+// 对话框成功回调
+const handleDialogSuccess = () => {
+  loadTokens()
 }
 
 // 删除 Token
@@ -402,11 +343,15 @@ const deleteToken = (token) => {
     {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
-      type: 'warning',
+      type: 'warning'
     }
   ).then(async () => {
     try {
-      await apiDeleteToken(token.id)
+      if (token.group_id) {
+        await deleteGroupToken(token.group_id, token.id)
+      } else {
+        await apiDeleteToken(token.id)
+      }
       ElMessage.success('删除成功')
       loadTokens()
     } catch (error) {
@@ -429,7 +374,7 @@ const batchDeleteTokens = () => {
     {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
-      type: 'warning',
+      type: 'warning'
     }
   ).then(async () => {
     try {
@@ -478,6 +423,29 @@ const handleSizeChange = (size) => {
 const handleCurrentChange = (page) => {
   currentPage.value = page
   loadTokens()
+}
+
+// 处理下拉菜单命令
+const handleCommand = (command) => {
+  switch (command) {
+    case 'refresh':
+      refreshTokens()
+      break
+    case 'exportTokens':
+      exportTokens()
+      break
+  }
+}
+
+// 导出Token数据
+const exportTokens = () => {
+  ElMessage.info('导出功能开发中')
+  // 实现导出功能
+}
+
+// 状态过滤方法
+const filterStatus = (value, row) => {
+  return row.status === value
 }
 
 // 生命周期钩子

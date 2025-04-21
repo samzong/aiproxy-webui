@@ -1,7 +1,8 @@
 <template>
   <el-dialog
     :title="isEdit ? '编辑渠道' : '添加渠道'"
-    v-model="visible"
+    :modelValue="visible"
+    @update:modelValue="$emit('update:visible', $event)"
     width="700px"
     @close="handleClose"
   >
@@ -51,6 +52,10 @@
       
       <el-form-item label="优先级" prop="priority">
         <el-input-number v-model="form.priority" :min="0" :max="100" />
+      </el-form-item>
+      
+      <el-form-item label="余额" prop="balance">
+        <el-input-number v-model="form.balance" :min="0" :precision="2" :step="0.01" />
       </el-form-item>
       
       <el-form-item label="支持的模型">
@@ -140,6 +145,7 @@ const form = reactive({
   base_url: '',
   status: 1,
   priority: 0,
+  balance: 0,
   models: [],
   model_mapping: {},
   config: {}
@@ -163,11 +169,65 @@ onMounted(async () => {
     loadChannelTypeNames(),
     loadChannelTypeMetas()
   ])
-  
-  if (props.isEdit && props.channel && props.channel.id) {
-    await loadChannelDetail(props.channel.id)
+})
+
+// Watch for changes to the channel prop
+watch(() => props.channel, (newChannel) => {
+  if (props.visible && newChannel && Object.keys(newChannel).length > 0) {
+    // If the dialog is open and we have channel data, initialize the form
+    initFormFromChannel(newChannel)
+  }
+}, { immediate: true, deep: true })
+
+// Watch for dialog visibility
+watch(() => props.visible, (isVisible) => {
+  if (isVisible) {
+    // When dialog opens, initialize from channel data if it exists
+    if (props.channel && Object.keys(props.channel).length > 0) {
+      initFormFromChannel(props.channel)
+    } else {
+      // Reset form for new channel
+      resetForm()
+    }
   }
 })
+
+// Initialize form data from channel
+const initFormFromChannel = (channel) => {
+  if (!channel) return
+
+  form.name = channel.name || ''
+  form.type = channel.type || ''
+  form.key = channel.key || ''
+  form.base_url = channel.base_url || ''
+  form.status = channel.status || 1
+  form.priority = channel.priority || 0
+  form.balance = channel.balance || 0
+  form.models = channel.models || []
+  form.model_mapping = channel.model_mapping || {}
+  form.config = channel.config || {}
+
+  // Load available models for this channel type if needed
+  if (form.type) {
+    loadModels(form.type)
+  }
+}
+
+// Reset form to default values
+const resetForm = () => {
+  form.name = ''
+  form.type = ''
+  form.key = ''
+  form.base_url = ''
+  form.status = 1
+  form.priority = 0
+  form.balance = 0
+  form.models = []
+  form.model_mapping = {}
+  form.config = {}
+  
+  formRef.value?.resetFields()
+}
 
 // 加载渠道类型名称
 const loadChannelTypeNames = async () => {
@@ -188,35 +248,6 @@ const loadChannelTypeMetas = async () => {
   } catch (error) {
     ElMessage.error('获取渠道类型元数据失败')
     console.error(error)
-  }
-}
-
-// 加载渠道详情
-const loadChannelDetail = async (id) => {
-  loading.value = true
-  try {
-    const res = await getChannelById(id)
-    const channelData = res.data
-    
-    form.name = channelData.name
-    form.type = channelData.type
-    form.key = channelData.key
-    form.base_url = channelData.base_url
-    form.status = channelData.status
-    form.priority = channelData.priority
-    form.models = channelData.models || []
-    form.model_mapping = channelData.model_mapping || {}
-    form.config = channelData.config || {}
-    
-    // 加载该类型支持的模型
-    if (form.type) {
-      await loadModels(form.type)
-    }
-  } catch (error) {
-    ElMessage.error('获取渠道详情失败')
-    console.error(error)
-  } finally {
-    loading.value = false
   }
 }
 
@@ -278,6 +309,7 @@ const submitForm = async () => {
         base_url: form.base_url,
         status: form.status,
         priority: form.priority,
+        balance: form.balance,
         models: form.models,
         model_mapping: form.model_mapping,
         config: form.config
@@ -306,13 +338,6 @@ const submitForm = async () => {
 const handleClose = () => {
   emit('update:visible', false)
 }
-
-// 监听visible变化，重置表单
-watch(() => props.visible, (val) => {
-  if (!val) {
-    formRef.value?.resetFields()
-  }
-})
 </script>
 
 <style scoped>

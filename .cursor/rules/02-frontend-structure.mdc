@@ -1,0 +1,40 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Frontend Code Structure
+
+The WebUI frontend is built with Vue 3, using a modular file structure.
+
+## Directory Structure
+
+- **Main Entry**: [main.js](mdc:src/main.js) and [App.vue](mdc:src/App.vue)
+- **API Calls**: The [api](mdc:src/api) directory contains API requests for communication with the backend service
+- **Page Views**: The [views](mdc:src/views) directory contains page components for each functional module
+- **Routing Configuration**: The [router](mdc:src/router) directory defines application routes
+- **State Management**: The [stores](mdc:src/stores) directory manages application state
+- **Layout Components**: The [layout](mdc:src/layout) directory contains layout components
+- **Utility Functions**: The [utils](mdc:src/utils) directory contains common utility functions
+
+## Main Functional Modules
+
+- **Login Authentication**: [login](mdc:src/views/login)
+- **Dashboard**: [dashboard](mdc:src/views/dashboard)
+- **Channel Management**: [channel](mdc:src/views/channel)
+- **Group Management**: [group](mdc:src/views/group)
+- **Model Configuration**: [model](mdc:src/views/model)
+- **Log Viewing**: [log](mdc:src/views/log)
+- **Token Management**: [token](mdc:src/views/token)
+- **Monitoring Management**: [monitor](mdc:src/views/monitor)
+
+## API Communication
+
+Communication between frontend and backend is implemented through API modules:
+
+- **Channel API**: [channel.js](mdc:src/api/channel.js)
+- **Group API**: [group.js](mdc:src/api/group.js)
+- **Token API**: [token.js](mdc:src/api/token.js)
+- **Dashboard API**: [dashboard.js](mdc:src/api/dashboard.js)
+- **Log API**: [log.js](mdc:src/api/log.js)
+- **Model API**: [model.js](mdc:src/api/model.js)

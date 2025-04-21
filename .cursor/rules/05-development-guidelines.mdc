@@ -1,0 +1,40 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# WebUI Development Guidelines
+
+This guide provides best practices for development in the AIProxy WebUI project.
+
+## Important Notes
+
+1. **Do not modify backend code**: The backend code in the [aiproxy/core](mdc:aiproxy/core) directory comes from another repository and should not be modified.
+2. **Read-only access to backend**: You can read and search the backend code to understand API structures and data models, but all modifications should be limited to the frontend code.
+
+## Development Process
+
+1. Understand frontend-backend interaction: Before developing new features, first review the backend API implementation to understand available data and operations.
+2. Follow existing patterns: New features should follow the project's existing code organization and design patterns.
+3. Maintain UI consistency: New UI components should maintain consistency with the existing design.
+
+## Code Style
+
+- Use Vue 3 Composition API
+- Keep components with single responsibility
+- Handle data transformations in the API layer
+- Extract reusable logic into utility functions
+
+## Feature Development Process
+
+1. Add new API functions in [src/api](mdc:src/api)
+2. Create new view components in [src/views](mdc:src/views)
+3. Add new routes in [src/router](mdc:src/router)
+4. Add state management in [src/stores](mdc:src/stores) if needed
+5. Update navigation menus to include new features
+
+## Debugging Tips
+
+- Use Vue Developer Tools to debug components
+- Check network requests to confirm API interactions
+- Reference [aiproxy/core/controller](mdc:aiproxy/core/controller) to understand backend implementation

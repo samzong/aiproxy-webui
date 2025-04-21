@@ -7,7 +7,42 @@
             <div class="card-header">
               <span>系统概览</span>
               <div class="card-header-right">
-                <el-select v-model="timeRange" placeholder="选择时间范围" @change="fetchData">
+                <el-select 
+                  v-model="searchConditions.group" 
+                  placeholder="所有组" 
+                  clearable 
+                  style="width: 150px; margin-right: 10px;" 
+                  @change="fetchData"
+                >
+                  <el-option label="所有组" value="" />
+                  <el-option v-for="group in groups" :key="group.id" :label="group.id" :value="group.id" />
+                </el-select>
+                <el-select 
+                  v-model="searchConditions.model" 
+                  placeholder="所有模型" 
+                  clearable 
+                  style="width: 180px; margin-right: 10px;" 
+                  @change="fetchData"
+                >
+                  <el-option label="所有模型" value="" />
+                  <el-option v-for="model in models" :key="model" :label="model" :value="model" />
+                </el-select>
+                <el-select 
+                  v-model="searchConditions.channel" 
+                  placeholder="所有渠道" 
+                  clearable 
+                  style="width: 150px; margin-right: 10px;" 
+                  @change="fetchData"
+                >
+                  <el-option label="所有渠道" value="" />
+                  <el-option v-for="channel in channels" :key="channel.id" :label="channel.name" :value="channel.id" />
+                </el-select>
+                <el-select 
+                  v-model="searchConditions.timeRange" 
+                  placeholder="过去24小时" 
+                  style="width: 150px;" 
+                  @change="fetchData"
+                >
                   <el-option label="过去24小时" value="day" />
                   <el-option label="过去一周" value="week" />
                   <el-option label="过去两周" value="two_week" />
@@ -223,7 +258,12 @@
           <template #header>
             <div class="card-header">
               <span>模型请求趋势</span>
-              <el-select v-model="topModelsCount" placeholder="显示模型数量" @change="renderModelTrendChart">
+              <el-select 
+                v-model="topModelsCount" 
+                placeholder="Top 5" 
+                style="width: 120px;" 
+                @change="renderModelTrendChart"
+              >
                 <el-option label="Top 3" :value="3" />
                 <el-option label="Top 5" :value="5" />
                 <el-option label="Top 10" :value="10" />
@@ -238,7 +278,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { 
   getDashboard, 
   getModelCostRank, 
@@ -247,14 +287,41 @@ import {
   getGroupRequestDistribution, 
   getModelTrends 
 } from '@/api/dashboard'
+import { getGroups as fetchGroups } from '@/api/group'
+import { getChannels as fetchChannels } from '@/api/channel'
+import { getEnabledModels } from '@/api/model'
 import * as echarts from 'echarts'
 import { ArrowUp, ArrowDown, ChatDotRound, CircleClose, Tickets, Money, Timer, Warning, Stopwatch, UserFilled } from '@element-plus/icons-vue'
 
-const timeRange = ref('day')
+// 搜索条件
+const searchConditions = ref({
+  timeRange: 'day',  // 默认过去24小时
+  group: '',         // 默认所有组
+  model: '',         // 默认所有模型
+  channel: ''        // 默认所有渠道
+})
+
+// 显示文本
+const displayTexts = computed(() => {
+  return {
+    group: searchConditions.value.group || '所有组',
+    model: searchConditions.value.model || '所有模型',
+    channel: searchConditions.value.channel || '所有渠道',
+    timeRange: searchConditions.value.timeRange === 'day' ? '过去24小时' :
+               searchConditions.value.timeRange === 'week' ? '过去一周' :
+               searchConditions.value.timeRange === 'two_week' ? '过去两周' : '过去一个月'
+  }
+})
+
 const dashboardData = ref({})
 const modelRank = ref([])
 const channelData = ref([])
 const topModelsCount = ref(5)
+
+// 下拉选项数据
+const groups = ref([])
+const models = ref([])
+const channels = ref([])
 
 // 响应时间分布数据
 const responseTimeDistribution = ref([])
@@ -307,15 +374,36 @@ const calculateErrorRate = (data) => {
 // 获取仪表盘数据
 const fetchData = async () => {
   try {
-    const response = await getDashboard({
-      type: timeRange.value,
+    // 构建查询参数
+    const params = {
+      type: searchConditions.value.timeRange,
       token_usage: true
-    })
+    }
+    
+    // 添加组筛选条件
+    if (searchConditions.value.group) {
+      params.group = searchConditions.value.group
+    }
+    
+    // 添加模型筛选条件
+    if (searchConditions.value.model) {
+      params.model = searchConditions.value.model
+    }
+    
+    // 添加渠道筛选条件
+    if (searchConditions.value.channel) {
+      params.channel = searchConditions.value.channel
+    }
+    
+    const response = await getDashboard(params)
     
     if (response && response.data) {
       // 获取真实趋势数据
       const trendsResponse = await getDashboardTrends({
-        type: timeRange.value
+        type: searchConditions.value.timeRange,
+        ...(searchConditions.value.group ? { group: searchConditions.value.group } : {}),
+        ...(searchConditions.value.model ? { model: searchConditions.value.model } : {}),
+        ...(searchConditions.value.channel ? { channel: searchConditions.value.channel } : {})
       })
       
       let trendData = {}
@@ -355,7 +443,9 @@ const fetchData = async () => {
     
     // 获取模型成本排名
     const rankResponse = await getModelCostRank({
-      type: timeRange.value
+      type: searchConditions.value.timeRange,
+      ...(searchConditions.value.group ? { group: searchConditions.value.group } : {}),
+      ...(searchConditions.value.channel ? { channel: searchConditions.value.channel } : {})
     })
     
     if (rankResponse && rankResponse.data) {
@@ -386,7 +476,10 @@ const fetchData = async () => {
 const fetchResponseTimeData = async () => {
   try {
     const res = await getResponseTimeDistribution({
-      type: timeRange.value
+      type: searchConditions.value.timeRange,
+      ...(searchConditions.value.group ? { group: searchConditions.value.group } : {}),
+      ...(searchConditions.value.model ? { model: searchConditions.value.model } : {}),
+      ...(searchConditions.value.channel ? { channel: searchConditions.value.channel } : {})
     })
     
     if (res && res.data) {
@@ -403,7 +496,9 @@ const fetchResponseTimeData = async () => {
 const fetchGroupRequestData = async () => {
   try {
     const res = await getGroupRequestDistribution({
-      type: timeRange.value
+      type: searchConditions.value.timeRange,
+      ...(searchConditions.value.model ? { model: searchConditions.value.model } : {}),
+      ...(searchConditions.value.channel ? { channel: searchConditions.value.channel } : {})
     })
     
     if (res && res.data) {
@@ -420,7 +515,9 @@ const fetchGroupRequestData = async () => {
 const fetchModelTrendData = async () => {
   try {
     const res = await getModelTrends({
-      type: timeRange.value
+      type: searchConditions.value.timeRange,
+      ...(searchConditions.value.group ? { group: searchConditions.value.group } : {}),
+      ...(searchConditions.value.channel ? { channel: searchConditions.value.channel } : {})
     })
     
     if (res && res.data) {
@@ -466,7 +563,7 @@ const generateModelTrendData = () => {
   let interval
   let count
   
-  switch (timeRange.value) {
+  switch (searchConditions.value.timeRange) {
     case 'month':
       interval = 24 * 60 * 60 * 1000 // 每天
       count = 30
@@ -967,8 +1064,34 @@ const handleResize = () => {
   modelTrendChart && modelTrendChart.resize()
 }
 
+// 加载下拉选项数据
+const loadFilterOptions = async () => {
+  try {
+    // 加载组数据
+    const groupsRes = await fetchGroups({ page: 1, per_page: 100 })
+    if (groupsRes && groupsRes.data && groupsRes.data.groups) {
+      groups.value = groupsRes.data.groups
+    }
+    
+    // 加载模型数据
+    const modelsRes = await getEnabledModels()
+    if (modelsRes && modelsRes.data) {
+      models.value = modelsRes.data.map(model => model.name || model)
+    }
+    
+    // 加载渠道数据
+    const channelsRes = await fetchChannels()
+    if (channelsRes && channelsRes.data && channelsRes.data.channels) {
+      channels.value = channelsRes.data.channels
+    }
+  } catch (error) {
+    console.error('加载筛选选项数据失败:', error)
+  }
+}
+
 onMounted(() => {
   fetchData()
+  loadFilterOptions()
   window.addEventListener('resize', handleResize)
 })
 

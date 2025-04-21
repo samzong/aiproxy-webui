@@ -49,10 +49,40 @@
             <span v-else>无限制</span>
           </el-descriptions-item>
           <el-descriptions-item label="配额">
-            {{ tokenDetail.quota ? tokenDetail.quota.toFixed(2) : '无限制' }}
+            <div class="quota-container">
+              {{ formatQuota(tokenDetail.quota) }}
+              <el-button type="primary" link @click="openQuotaDialog">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="已使用配额">
+            <div class="quota-container">
+              {{ formatQuota(tokenDetail.used_quota) }}
+              <el-button 
+                type="primary" 
+                link 
+                @click="resetQuota" 
+                :disabled="!tokenDetail.used_quota"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
           </el-descriptions-item>
           <el-descriptions-item label="剩余配额">
-            {{ tokenDetail.remaining_quota ? tokenDetail.remaining_quota.toFixed(2) : '无限制' }}
+            <span :class="getQuotaClass">
+              {{ formatRemainingQuota }}
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="配额告警">
+            <div class="alarm-container">
+              <el-tag :type="tokenDetail.alert_enabled ? 'success' : 'info'">
+                {{ tokenDetail.alert_enabled ? '已启用' : '未启用' }}
+              </el-tag>
+              <template v-if="tokenDetail.alert_enabled">
+                <span class="alarm-threshold">阈值: {{ formatQuota(tokenDetail.alert_threshold) }}</span>
+              </template>
+            </div>
           </el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="tokenDetail.status === 1 ? 'success' : 'danger'">
@@ -88,21 +118,101 @@
         </div>
       </div>
     </el-card>
+    
+    <!-- 配额更新对话框 -->
+    <el-dialog
+      v-model="quotaDialogVisible"
+      title="更新 Token 配额"
+      width="500px"
+    >
+      <el-form :model="quotaForm" label-width="100px" :rules="quotaRules" ref="quotaFormRef">
+        <el-form-item label="Token">
+          <el-input v-model="quotaForm.name" disabled />
+        </el-form-item>
+        <el-form-item label="当前配额">
+          <el-input v-model="formattedCurrentQuota" disabled />
+        </el-form-item>
+        <el-form-item label="已使用">
+          <el-input v-model="formattedUsedQuota" disabled />
+        </el-form-item>
+        <el-form-item label="剩余配额">
+          <el-input v-model="formattedRemainingQuota" disabled />
+        </el-form-item>
+        <el-form-item label="新配额" prop="quota">
+          <el-input-number 
+            v-model="quotaForm.quota" 
+            :min="0" 
+            :precision="2" 
+            :step="10" 
+            style="width: 100%" 
+            placeholder="设置为 0 表示无限制"
+          />
+        </el-form-item>
+        <el-divider content-position="left">配额告警设置</el-divider>
+        <el-form-item label="启用告警">
+          <el-switch v-model="quotaForm.alert_enabled" />
+        </el-form-item>
+        <el-form-item label="告警阈值" v-if="quotaForm.alert_enabled">
+          <el-input-number 
+            v-model="quotaForm.alert_threshold" 
+            :min="0" 
+            :precision="2" 
+            :step="10" 
+            style="width: 100%" 
+            placeholder="设置告警阈值"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="quotaDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitQuotaUpdate" :loading="submitLoading">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getTokenById, deleteToken as apiDeleteToken, updateTokenStatus } from '@/api/token'
+import { 
+  getTokenById, 
+  deleteToken as apiDeleteToken, 
+  updateTokenStatus, 
+  updateToken, 
+  resetTokenUsedQuota as apiResetTokenUsedQuota 
+} from '@/api/token'
+import { Edit, Delete } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const tokenId = route.params.id
 const loading = ref(true)
 const actionLoading = ref(false)
+const submitLoading = ref(false)
 const tokenDetail = ref({})
+
+// 配额对话框
+const quotaDialogVisible = ref(false)
+const quotaFormRef = ref(null)
+const quotaForm = reactive({
+  id: null,
+  name: '',
+  group_id: '',
+  quota: 0,
+  used_quota: 0,
+  alert_enabled: false,
+  alert_threshold: 0
+})
+
+// 配额验证规则
+const quotaRules = {
+  quota: [
+    { required: true, message: '请输入配额值', trigger: 'blur' }
+  ]
+}
 
 // 获取 Token 详情
 const loadToken = async () => {
@@ -194,6 +304,81 @@ const deleteToken = () => {
   })
 }
 
+// 打开配额设置对话框
+const openQuotaDialog = () => {
+  quotaForm.id = tokenDetail.value.id
+  quotaForm.name = tokenDetail.value.name
+  quotaForm.group_id = tokenDetail.value.group_id
+  quotaForm.quota = tokenDetail.value.quota || 0
+  quotaForm.used_quota = tokenDetail.value.used_quota || 0
+  quotaForm.alert_enabled = tokenDetail.value.alert_enabled || false
+  quotaForm.alert_threshold = tokenDetail.value.alert_threshold || 0
+  
+  quotaDialogVisible.value = true
+}
+
+// 更新配额
+const submitQuotaUpdate = async () => {
+  quotaFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    
+    submitLoading.value = true
+    try {
+      // 准备更新的数据
+      const updateData = {
+        quota: quotaForm.quota,
+        alert_enabled: quotaForm.alert_enabled,
+        alert_threshold: quotaForm.alert_threshold
+      }
+      
+      await updateToken(tokenId, updateData)
+      ElMessage.success('配额更新成功')
+      quotaDialogVisible.value = false
+      
+      // 更新本地数据
+      tokenDetail.value.quota = quotaForm.quota
+      tokenDetail.value.alert_enabled = quotaForm.alert_enabled
+      tokenDetail.value.alert_threshold = quotaForm.alert_threshold
+      
+    } catch (error) {
+      ElMessage.error('配额更新失败')
+      console.error(error)
+    } finally {
+      submitLoading.value = false
+    }
+  })
+}
+
+// 重置使用量
+const resetQuota = () => {
+  if (!tokenDetail.value.used_quota) {
+    ElMessage.warning('当前使用量已经为 0，无需重置')
+    return
+  }
+  
+  ElMessageBox.confirm('确定要重置此 Token 的使用量吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    actionLoading.value = true
+    try {
+      await apiResetTokenUsedQuota(tokenId)
+      ElMessage.success('使用量重置成功')
+      
+      // 更新本地数据
+      tokenDetail.value.used_quota = 0
+    } catch (error) {
+      ElMessage.error('使用量重置失败')
+      console.error(error)
+    } finally {
+      actionLoading.value = false
+    }
+  }).catch(() => {
+    // 取消操作
+  })
+}
+
 // 格式化日期
 const formatDate = (timestamp) => {
   if (!timestamp) return ''
@@ -207,6 +392,63 @@ const formatDate = (timestamp) => {
     second: '2-digit',
   }).format(date)
 }
+
+// 格式化配额数值
+const formatQuota = (quota) => {
+  if (quota === 0 || quota === undefined || quota === null) {
+    return '无限制'
+  }
+  return quota.toFixed(2)
+}
+
+// 计算剩余配额
+const formatRemainingQuota = computed(() => {
+  const quota = tokenDetail.value.quota || 0
+  const usedQuota = tokenDetail.value.used_quota || 0
+  
+  if (quota === 0) {
+    return '无限制'
+  }
+  
+  const remaining = quota - usedQuota
+  return remaining.toFixed(2)
+})
+
+// 获取配额的样式类
+const getQuotaClass = computed(() => {
+  const quota = tokenDetail.value.quota || 0
+  const usedQuota = tokenDetail.value.used_quota || 0
+  
+  if (quota === 0) return ''
+  
+  const remaining = quota - usedQuota
+  const percentage = (remaining / quota) * 100
+  
+  if (percentage <= 10) return 'quota-critical'
+  if (percentage <= 30) return 'quota-warning'
+  return 'quota-normal'
+})
+
+// 计算属性 - 格式化的配额值
+const formattedCurrentQuota = computed(() => {
+  return formatQuota(quotaForm.quota)
+})
+
+const formattedUsedQuota = computed(() => {
+  return formatQuota(quotaForm.used_quota)
+})
+
+const formattedRemainingQuota = computed(() => {
+  const quota = quotaForm.quota || 0
+  const usedQuota = quotaForm.used_quota || 0
+  
+  if (quota === 0) {
+    return '无限制'
+  }
+  
+  const remaining = quota - usedQuota
+  return remaining.toFixed(2)
+})
 
 onMounted(() => {
   loadToken()
@@ -225,10 +467,17 @@ onMounted(() => {
   gap: 10px;
 }
 
-.key-container {
+.key-container,
+.quota-container,
+.alarm-container {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.alarm-threshold {
+  margin-left: 10px;
+  color: #606266;
 }
 
 .model-tag,
@@ -242,5 +491,17 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   gap: 20px;
+}
+
+.quota-normal {
+  color: #67c23a;
+}
+
+.quota-warning {
+  color: #e6a23c;
+}
+
+.quota-critical {
+  color: #f56c6c;
 }
 </style> 

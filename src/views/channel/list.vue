@@ -3,21 +3,35 @@
     <div class="channel-header">
       <h1>渠道管理</h1>
       <div class="channel-actions">
-        <el-button type="primary" @click="addChannel">添加渠道</el-button>
-        <el-button type="danger" :disabled="selectedChannels.length === 0" @click="batchDeleteChannels">批量删除</el-button>
-        <el-button type="primary" @click="refreshChannels">刷新</el-button>
-        <el-button type="success" @click="testAllChannels" :loading="testAllLoading">测试所有渠道</el-button>
-        <el-button type="warning" @click="updateAllChannelsBalance" :loading="updateAllLoading">更新所有余额</el-button>
+        <el-button type="primary" icon="Plus" @click="addChannel">添加渠道</el-button>
+        <el-button type="danger" icon="Delete" :disabled="selectedChannels.length === 0" @click="batchDeleteChannels">批量删除</el-button>
+        <el-dropdown split-button type="primary" @command="handleCommand">
+          更多操作
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="refresh" icon="Refresh">刷新列表</el-dropdown-item>
+              <el-dropdown-item command="testAll" icon="Check" :disabled="testAllLoading">测试所有渠道</el-dropdown-item>
+              <el-dropdown-item command="updateBalance" icon="Money" :disabled="updateAllLoading">更新所有余额</el-dropdown-item>
+              <el-dropdown-item command="exportChannels" icon="Download">导出数据</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
     
     <div class="channel-search">
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="搜索渠道" clearable @keyup.enter="searchChannels" />
+          <el-input 
+            v-model="searchForm.keyword" 
+            placeholder="搜索名称/ID/URL" 
+            clearable 
+            prefix-icon="Search"
+            @keyup.enter="searchChannels" 
+          />
         </el-form-item>
         <el-form-item label="渠道类型">
-          <el-select v-model="searchForm.channel_type" placeholder="选择类型" clearable>
+          <el-select v-model="searchForm.channel_type" placeholder="所有类型" clearable style="width: 160px;">
             <el-option
               v-for="(name, type) in channelTypeNames"
               :key="type"
@@ -26,9 +40,25 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="searchForm.status" placeholder="所有状态" clearable style="width: 120px;">
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="2" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-select v-model="searchForm.order" placeholder="默认排序" clearable style="width: 150px;">
+            <el-option label="ID升序" value="id asc" />
+            <el-option label="ID降序" value="id desc" />
+            <el-option label="创建时间升序" value="created_at asc" />
+            <el-option label="创建时间降序" value="created_at desc" />
+            <el-option label="优先级升序" value="priority asc" />
+            <el-option label="优先级降序" value="priority desc" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="searchChannels">搜索</el-button>
-          <el-button @click="resetSearch">重置</el-button>
+          <el-button type="primary" icon="Search" @click="searchChannels">搜索</el-button>
+          <el-button icon="RefreshRight" @click="resetSearch">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -38,50 +68,90 @@
       :data="channels"
       style="width: 100%"
       @selection-change="handleSelectionChange"
+      border
+      stripe
+      highlight-current-row
+      ref="channelTable"
     >
       <el-table-column type="selection" width="55" />
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="name" label="名称" min-width="120" />
-      <el-table-column label="类型" min-width="120">
+      <el-table-column prop="id" label="ID" width="80" sortable />
+      <el-table-column prop="name" label="名称" min-width="120" show-overflow-tooltip />
+      <el-table-column label="类型" width="120">
         <template #default="scope">
-          {{ channelTypeNames[scope.row.type] || `未知类型(${scope.row.type})` }}
+          <el-tag type="info">
+            {{ channelTypeNames[scope.row.type] || `未知类型(${scope.row.type})` }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="base_url" label="基础URL" min-width="180" show-overflow-tooltip />
-      <el-table-column label="状态" width="100">
+      <el-table-column prop="priority" label="优先级" width="100" sortable>
+        <template #default="scope">
+          <el-tag type="success" effect="plain" size="small">{{ scope.row.priority || 10 }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="100" :filters="[
+        { text: '启用', value: 1 },
+        { text: '禁用', value: 2 }
+      ]" :filter-method="filterStatus" filter-placement="bottom">
         <template #default="scope">
           <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
             {{ scope.row.status === 1 ? '启用' : '禁用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="余额" width="120">
+      <el-table-column label="余额" width="120" sortable>
         <template #default="scope">
-          <span>{{ scope.row.balance ? scope.row.balance.toFixed(2) : '0.00' }}</span>
+          <span :class="{ 'low-balance': scope.row.balance < 10 }">
+            $ {{ scope.row.balance ? scope.row.balance.toFixed(2) : '0.00' }}
+          </span>
         </template>
       </el-table-column>
-      <el-table-column label="已用金额" width="120">
+      <el-table-column label="已用金额" width="120" sortable>
         <template #default="scope">
-          <span>{{ scope.row.used_amount ? scope.row.used_amount.toFixed(2) : '0.00' }}</span>
+          <span>$ {{ scope.row.used_amount ? scope.row.used_amount.toFixed(2) : '0.00' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="180">
+      <el-table-column label="模型数量" width="100">
+        <template #default="scope">
+          <el-tooltip 
+            effect="dark" 
+            :content="scope.row.models && scope.row.models.length > 0 ? scope.row.models.join(', ') : '无模型'" 
+            placement="top"
+          >
+            <el-badge :value="scope.row.models ? scope.row.models.length : 0" type="info" />
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" width="180" sortable>
         <template #default="scope">
           {{ formatDate(scope.row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" fixed="right" width="250">
+      <el-table-column label="操作" fixed="right" width="220">
         <template #default="scope">
-          <el-button size="small" type="primary" @click="editChannel(scope.row)">编辑</el-button>
-          <el-button 
-            size="small" 
-            :type="scope.row.status === 1 ? 'danger' : 'success'"
-            @click="toggleChannelStatus(scope.row)"
-          >
-            {{ scope.row.status === 1 ? '禁用' : '启用' }}
-          </el-button>
-          <el-button size="small" type="warning" @click="testChannel(scope.row)">测试</el-button>
-          <el-button size="small" type="danger" @click="deleteChannel(scope.row)">删除</el-button>
+          <el-button-group>
+            <el-button size="small" type="primary" @click="editChannel(scope.row)" title="编辑">
+              <el-icon><Edit /></el-icon>
+            </el-button>
+            <el-button 
+              size="small" 
+              :type="scope.row.status === 1 ? 'danger' : 'success'"
+              @click="toggleChannelStatus(scope.row)"
+              :title="scope.row.status === 1 ? '禁用' : '启用'"
+            >
+              <el-icon v-if="scope.row.status === 1"><Close /></el-icon>
+              <el-icon v-else><Check /></el-icon>
+            </el-button>
+            <el-button size="small" type="warning" @click="testChannel(scope.row)" title="测试">
+              <el-icon><Connection /></el-icon>
+            </el-button>
+            <el-button size="small" type="info" @click="updateChannelBalance(scope.row)" title="更新余额">
+              <el-icon><Refresh /></el-icon>
+            </el-button>
+            <el-button size="small" type="danger" @click="deleteChannel(scope.row)" title="删除">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-button-group>
         </template>
       </el-table-column>
     </el-table>
@@ -97,6 +167,14 @@
         @current-change="handleCurrentChange"
       />
     </div>
+    
+    <!-- 添加渠道表单对话框 -->
+    <ChannelFormDialog
+      v-model:visible="dialogVisible"
+      :channel="currentChannel"
+      :is-edit="Boolean(currentChannel.id)"
+      @success="handleDialogSuccess"
+    />
   </div>
 </template>
 
@@ -104,6 +182,7 @@
 import { ref, reactive, onMounted, onActivated } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import ChannelFormDialog from './ChannelFormDialog.vue'
 import { 
   getChannels, 
   getChannelTypeNames, 
@@ -113,8 +192,11 @@ import {
   searchChannels as apiSearchChannels,
   testAllChannels as apiTestAllChannels,
   testChannel as apiTestChannel,
-  updateAllChannelsBalance as apiUpdateAllChannelsBalance
+  updateAllChannelsBalance as apiUpdateAllChannelsBalance,
+  updateChannelBalance as apiUpdateChannelBalance,
+  getChannelById
 } from '@/api/channel'
+import { Plus, Delete, Refresh, Check, Money, Download, Search, RefreshRight, Edit, Close, Connection } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -126,10 +208,15 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const selectedChannels = ref([])
 const channelTypeNames = ref({})
+const channelTable = ref(null)
+const dialogVisible = ref(false)
+const currentChannel = ref({})
 
 const searchForm = reactive({
   keyword: '',
   channel_type: '',
+  status: '',
+  order: '',
 })
 
 // 加载渠道列表
@@ -138,12 +225,24 @@ const loadChannels = async () => {
   
   loading.value = true
   try {
-    const res = await getChannels({
+    const params = {
       page: currentPage.value,
       per_page: pageSize.value
-    })
-    channels.value = res.data.channels
-    total.value = res.data.total
+    }
+    
+    // 添加排序参数
+    if (searchForm.order) {
+      params.order = searchForm.order
+    }
+    
+    const res = await getChannels(params)
+    
+    if (res.data && res.data.channels) {
+      channels.value = res.data.channels
+      total.value = res.data.total
+    } else {
+      ElMessage.warning('获取渠道数据格式异常')
+    }
   } catch (error) {
     ElMessage.error('获取渠道列表失败')
     console.error(error)
@@ -165,12 +264,14 @@ const loadChannelTypeNames = async () => {
 
 // 添加渠道
 const addChannel = () => {
-  router.push('/channel/add')
+  currentChannel.value = {}
+  dialogVisible.value = true
 }
 
 // 编辑渠道
 const editChannel = (channel) => {
-  router.push(`/channel/add?id=${channel.id}`)
+  currentChannel.value = { ...channel }
+  dialogVisible.value = true
 }
 
 // 删除渠道
@@ -303,6 +404,8 @@ const searchChannels = async () => {
     const res = await apiSearchChannels({
       keyword: searchForm.keyword,
       channel_type: searchForm.channel_type,
+      status: searchForm.status,
+      order: searchForm.order,
       page: currentPage.value,
       per_page: pageSize.value
     })
@@ -320,6 +423,16 @@ const searchChannels = async () => {
 const resetSearch = () => {
   searchForm.keyword = ''
   searchForm.channel_type = ''
+  searchForm.status = ''
+  searchForm.order = ''
+  
+  // 重置表格筛选
+  if (channelTable.value) {
+    channelTable.value.clearFilter()
+  }
+  
+  // 重新加载数据
+  currentPage.value = 1
   loadChannels()
 }
 
@@ -339,6 +452,100 @@ const handleSizeChange = (val) => {
 // 当前页变化
 const handleCurrentChange = (val) => {
   currentPage.value = val
+  loadChannels()
+}
+
+// 处理下拉菜单命令
+const handleCommand = (command) => {
+  switch (command) {
+    case 'refresh':
+      refreshChannels()
+      break
+    case 'testAll':
+      testAllChannels()
+      break
+    case 'updateBalance':
+      updateAllChannelsBalance()
+      break
+    case 'exportChannels':
+      exportChannels()
+      break
+  }
+}
+
+// 导出渠道数据
+const exportChannels = () => {
+  if (channels.value.length === 0) {
+    ElMessage.warning('没有可导出的数据')
+    return
+  }
+  
+  try {
+    // 准备导出数据
+    const exportData = channels.value.map(channel => ({
+      ID: channel.id,
+      名称: channel.name,
+      类型: channelTypeNames.value[channel.type] || `未知类型(${channel.type})`,
+      基础URL: channel.base_url,
+      状态: channel.status === 1 ? '启用' : '禁用',
+      余额: channel.balance ? Number(channel.balance).toFixed(2) : '0.00',
+      已用金额: channel.used_amount ? Number(channel.used_amount).toFixed(2) : '0.00',
+      优先级: channel.priority || 0,
+      创建时间: formatDate(channel.created_at)
+    }))
+    
+    // 转换为CSV格式
+    const header = Object.keys(exportData[0]).join(',')
+    const csv = [
+      header,
+      ...exportData.map(row => Object.values(row).join(','))
+    ].join('\n')
+    
+    // 创建下载链接
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `渠道列表_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+    console.error(error)
+  }
+}
+
+// 过滤状态
+const filterStatus = (value, row) => {
+  return row.status === value
+}
+
+// 更新渠道余额
+const updateChannelBalance = async (channel) => {
+  try {
+    ElMessage.info(`正在更新渠道 "${channel.name}" 的余额...`)
+    await apiUpdateChannelBalance(channel.id)
+    ElMessage.success(`渠道 "${channel.name}" 余额更新成功`)
+    // 重新加载该渠道的数据
+    const index = channels.value.findIndex(item => item.id === channel.id)
+    if (index !== -1) {
+      const updatedChannel = await getChannelById(channel.id)
+      if (updatedChannel && updatedChannel.data) {
+        channels.value[index] = updatedChannel.data
+      }
+    }
+  } catch (error) {
+    ElMessage.error(`渠道 "${channel.name}" 余额更新失败`)
+    console.error(error)
+  }
+}
+
+// 对话框成功处理
+const handleDialogSuccess = () => {
   loadChannels()
 }
 
@@ -364,15 +571,56 @@ onActivated(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  background-color: #f5f7fa;
+  padding: 15px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.channel-header h1 {
+  margin: 0;
+  font-size: 22px;
+  color: #303133;
+}
+
+.channel-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .channel-search {
   margin-bottom: 20px;
+  background-color: #f5f7fa;
+  padding: 15px;
+  border-radius: 4px;
+}
+
+.low-balance {
+  color: #f56c6c;
+  font-weight: bold;
 }
 
 .pagination-container {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.el-button-group .el-button {
+  padding: 5px 8px;
+}
+
+/* 表格中的通用格式 */
+:deep(.el-table .cell) {
+  white-space: nowrap;
+}
+
+:deep(.el-table) {
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+:deep(.el-table .el-tag) {
+  margin: 0 auto;
 }
 </style> 

@@ -143,8 +143,8 @@ export function testAllChannels() {
  */
 export function updateAllChannelsBalance() {
   return request({
-    url: '/api/channels/balance/update_all',
-    method: 'post'
+    url: '/api/channels/update_balance',
+    method: 'get'
   })
 }
 
@@ -167,38 +167,12 @@ export function getChannelById(id) {
  */
 export function updateChannelBalance(id) {
   return request({
-    url: `/api/channel/${id}/balance`,
-    method: 'post'
+    url: `/api/channel/${id}/update_balance`,
+    method: 'get'
   })
 }
 
-/**
- * 更新通道余额警报设置
- * @param {number} id - 通道ID
- * @param {object} data - 设置数据 {enabled_balance_alert, balance_threshold}
- * @returns {Promise}
- */
-export function updateChannelBalanceAlert(id, data) {
-  return request({
-    url: `/api/channel/${id}/balance_alert`,
-    method: 'post',
-    data
-  })
-}
 
-/**
- * 更新通道自动余额检查设置
- * @param {number} id - 通道ID
- * @param {object} data - 设置数据 {enabled_auto_balance_check}
- * @returns {Promise}
- */
-export function updateChannelAutoBalanceCheck(id, data) {
-  return request({
-    url: `/api/channel/${id}/auto_balance_check`,
-    method: 'post',
-    data
-  })
-}
 
 // 获取所有渠道
 export function getAllChannels() {

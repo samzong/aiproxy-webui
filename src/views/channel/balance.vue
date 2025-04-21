@@ -60,27 +60,6 @@
           <span>{{ formatAmount(scope.row.used_amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="余额警报阈值" width="150">
-        <template #default="scope">
-          <div class="threshold-container">
-            <span class="threshold-value">{{ formatAmount(scope.row.balance_threshold) }}</span>
-            <el-switch
-              v-model="scope.row.enabled_balance_alert"
-              :disabled="updatingAlertSettingsId === scope.row.id"
-              @change="(val) => toggleBalanceAlert(scope.row, val)"
-            />
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column label="自动更新余额" width="150">
-        <template #default="scope">
-          <el-switch
-            v-model="scope.row.enabled_auto_balance_check"
-            :disabled="updatingBalanceCheckId === scope.row.id"
-            @change="(val) => toggleAutoBalanceCheck(scope.row, val)"
-          />
-        </template>
-      </el-table-column>
       <el-table-column label="最后更新时间" width="180">
         <template #default="scope">
           {{ formatDate(scope.row.balance_updated_at) }}
@@ -89,7 +68,6 @@
       <el-table-column label="操作" fixed="right" width="150">
         <template #default="scope">
           <el-button size="small" type="primary" :loading="scope.row.updating" @click="updateBalance(scope.row)">更新余额</el-button>
-          <el-button size="small" type="warning" @click="showThresholdDialog(scope.row)">设置阈值</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -106,28 +84,6 @@
       />
     </div>
     
-    <!-- 设置阈值对话框 -->
-    <el-dialog
-      v-model="thresholdDialogVisible"
-      title="设置余额警报阈值"
-      width="500px"
-    >
-      <el-form :model="thresholdForm" label-width="120px" ref="thresholdFormRef">
-        <el-form-item label="启用余额警报">
-          <el-switch v-model="thresholdForm.enabled_balance_alert" />
-        </el-form-item>
-        
-        <el-form-item label="余额警报阈值" v-if="thresholdForm.enabled_balance_alert">
-          <el-input-number v-model="thresholdForm.balance_threshold" :min="0" :precision="2" style="width: 100%" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="thresholdDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveThreshold" :loading="saveThresholdLoading">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -139,9 +95,7 @@ import {
   getChannelTypeNames, 
   searchChannels as apiSearchChannels,
   updateChannelBalance as apiUpdateChannelBalance,
-  updateAllChannelsBalance as apiUpdateAllChannelsBalance,
-  updateChannelBalanceAlert,
-  updateChannelAutoBalanceCheck
+  updateAllChannelsBalance as apiUpdateAllChannelsBalance
 } from '@/api/channel'
 
 // 状态变量

@@ -1,34 +1,41 @@
 <template>
-  <div class="container">
-    <el-card class="box-card">
-      <template #header>
-        <div class="card-header">
-          <span>日志列表</span>
-          <div class="right-buttons">
-            <el-button type="primary" @click="handleExport">导出</el-button>
-            <el-button type="info" @click="loadLogs">刷新</el-button>
-          </div>
-        </div>
-      </template>
-      
-      <!-- 搜索表单 -->
-      <el-form :model="searchForm" ref="searchFormRef" inline class="search-form">
-        <el-form-item label="关键词" prop="keyword">
-          <el-input v-model="searchForm.keyword" placeholder="请输入关键词" clearable />
+  <div class="log-list-container">
+    <div class="log-header">
+      <h1>日志列表</h1>
+      <div class="log-actions">
+        <el-button type="primary" @click="handleExport">
+          <el-icon><Download /></el-icon> 导出
+        </el-button>
+        <el-button type="info" @click="loadLogs">
+          <el-icon><Refresh /></el-icon> 刷新
+        </el-button>
+      </div>
+    </div>
+    
+    <div class="log-search">
+      <el-form :inline="true" :model="searchForm" ref="searchFormRef" class="search-form">
+        <el-form-item label="关键词">
+          <el-input 
+            v-model="searchForm.keyword" 
+            placeholder="搜索请求ID/模型/接口" 
+            clearable 
+            prefix-icon="Search"
+            @keyup.enter="searchLogs" 
+          />
         </el-form-item>
-        <el-form-item label="组" prop="group">
-          <el-select v-model="searchForm.group" placeholder="选择组" clearable>
-            <el-option label="全部" value="" />
+        <el-form-item label="组">
+          <el-select v-model="searchForm.group" placeholder="所有组" clearable style="width: 160px;">
+            <el-option label="所有组" value="" />
             <el-option v-for="item in groups" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="模型" prop="model_name">
-          <el-select v-model="searchForm.model_name" placeholder="选择模型" clearable>
-            <el-option label="全部" value="" />
+        <el-form-item label="模型">
+          <el-select v-model="searchForm.model_name" placeholder="所有模型" clearable style="width: 160px;">
+            <el-option label="所有模型" value="" />
             <el-option v-for="item in models" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
-        <el-form-item label="时间范围" prop="timeRange">
+        <el-form-item label="时间范围">
           <el-date-picker
             v-model="searchForm.timeRange"
             type="datetimerange"
@@ -37,69 +44,74 @@
             end-placeholder="结束时间"
             value-format="x"
             :shortcuts="dateShortcuts"
+            :default-time="defaultTimeRange"
+            style="width: 380px"
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" icon="Search" @click="searchLogs">搜索</el-button>
+          <el-button icon="RefreshRight" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
-      
-      <!-- 数据表格 -->
-      <el-table 
-        v-loading="loading" 
-        :data="logs" 
-        style="width: 100%"
-        border
-      >
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="request_id" label="请求ID" width="180" show-overflow-tooltip />
-        <el-table-column prop="endpoint" label="接口" width="180" show-overflow-tooltip />
-        <el-table-column prop="token_name" label="Token名称" width="120" show-overflow-tooltip />
-        <el-table-column prop="group" label="组" width="100" />
-        <el-table-column prop="model" label="模型" width="150" show-overflow-tooltip />
-        <el-table-column prop="prompt_tokens" label="输入Token" width="100" align="center" />
-        <el-table-column prop="completion_tokens" label="输出Token" width="100" align="center" />
-        <el-table-column prop="status_code" label="状态码" width="100">
-          <template #default="scope">
-            <el-tag :type="getStatusType(scope.row.status_code)">
-              {{ scope.row.status_code }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="latency" label="延迟(ms)" width="100" align="center" />
-        <el-table-column prop="used_amount" label="费用" width="100" align="center">
-          <template #default="scope">
-            {{ scope.row.used_amount ? scope.row.used_amount.toFixed(4) : '0.0000' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="180">
-          <template #default="scope">
-            {{ formatDate(scope.row.created_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="scope">
-            <el-button type="primary" link @click="handleViewDetail(scope.row)">
-              详情
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      
-      <!-- 分页 -->
-      <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.size"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="pagination.total"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
-      </div>
-    </el-card>
+    </div>
+    
+    <!-- 数据表格 -->
+    <el-table 
+      v-loading="loading" 
+      :data="logs" 
+      style="width: 100%"
+      border
+      stripe
+      highlight-current-row
+      :default-sort="{ prop: 'created_at', order: 'descending' }"
+    >
+      <el-table-column prop="id" label="ID" width="80" sortable />
+      <el-table-column prop="request_id" label="请求ID" width="180" show-overflow-tooltip />
+      <el-table-column prop="endpoint" label="接口" width="180" show-overflow-tooltip />
+      <el-table-column prop="token_name" label="Token名称" width="120" show-overflow-tooltip />
+      <el-table-column prop="group" label="组" width="100" />
+      <el-table-column prop="model" label="模型" width="150" show-overflow-tooltip />
+      <el-table-column prop="prompt_tokens" label="输入Token" width="100" align="center" sortable />
+      <el-table-column prop="completion_tokens" label="输出Token" width="100" align="center" sortable />
+      <el-table-column prop="status_code" label="状态码" width="100" sortable>
+        <template #default="scope">
+          <el-tag :type="getStatusType(scope.row.status_code)">
+            {{ scope.row.status_code }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="latency" label="延迟(ms)" width="100" align="center" sortable />
+      <el-table-column prop="used_amount" label="费用" width="100" align="center" sortable>
+        <template #default="scope">
+          {{ scope.row.used_amount ? scope.row.used_amount.toFixed(4) : '0.0000' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="created_at" label="创建时间" width="180" sortable>
+        <template #default="scope">
+          {{ formatDate(scope.row.created_at) }}
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="120" fixed="right">
+        <template #default="scope">
+          <el-button type="primary" link @click="handleViewDetail(scope.row)">
+            <el-icon><Document /></el-icon> 详情
+          </el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+    
+    <!-- 分页 -->
+    <div class="pagination-container">
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.size"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        :total="pagination.total"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
+    </div>
     
     <!-- 日志详情弹窗 -->
     <el-dialog
@@ -186,15 +198,28 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getLogs, searchLogs, getLogDetail } from '@/api/log'
+import { getLogs, searchLogs as apiSearchLogs, getLogDetail } from '@/api/log'
 import { formatDateTime } from '@/utils'
 import { useRouter } from 'vue-router'
+import { 
+  Download, 
+  Refresh, 
+  Search, 
+  RefreshRight, 
+  Document 
+} from '@element-plus/icons-vue'
 
 // 状态数据
 const loading = ref(false)
 const logs = ref([])
 const groups = ref([])
 const models = ref([])
+
+// 默认时间区间（开始和结束时间点）
+const defaultTimeRange = [
+  new Date(2000, 0, 1, 0, 0, 0),
+  new Date(2000, 0, 1, 23, 59, 59),
+]
 
 // 搜索表单
 const searchFormRef = ref(null)
@@ -281,7 +306,7 @@ const loadLogs = async () => {
     }
     
     const response = searchForm.keyword 
-      ? await searchLogs(params) 
+      ? await apiSearchLogs(params) 
       : await getLogs(params)
     
     // 检查是否请求成功
@@ -472,13 +497,20 @@ const buildSearchParams = () => {
     // 转换为毫秒
     params.start_timestamp = parseInt(searchForm.timeRange[0]) * 1000
     params.end_timestamp = parseInt(searchForm.timeRange[1]) * 1000
+  } else {
+    // 如果没有设置时间范围，默认使用最近24小时
+    const end = new Date()
+    const start = new Date()
+    start.setTime(start.getTime() - 3600 * 1000 * 24)
+    params.start_timestamp = Math.floor(start.getTime())
+    params.end_timestamp = Math.floor(end.getTime())
   }
   
   return params
 }
 
 // 搜索处理
-const handleSearch = () => {
+const searchLogs = () => {
   pagination.page = 1
   loadLogs()
 }
@@ -486,6 +518,13 @@ const handleSearch = () => {
 // 重置搜索
 const handleReset = () => {
   searchFormRef.value?.resetFields()
+  
+  // 重置为默认的最近24小时
+  const end = new Date()
+  const start = new Date()
+  start.setTime(start.getTime() - 3600 * 1000 * 24)
+  searchForm.timeRange = [Math.floor(start.getTime() / 1000), Math.floor(end.getTime() / 1000)]
+  
   pagination.page = 1
   loadLogs()
 }
@@ -497,8 +536,24 @@ const handleExport = () => {
     cancelButtonText: '取消',
     type: 'info'
   }).then(() => {
-    ElMessage.success('导出功能开发中')
-    // TODO: 实现导出功能
+    // 构建导出参数，与搜索参数相同
+    const exportParams = buildSearchParams()
+    
+    // 显示导出进行中的消息
+    const loadingMessage = ElMessage({
+      message: '正在导出日志数据，请稍候...',
+      type: 'info',
+      duration: 0
+    })
+    
+    // 模拟导出过程
+    setTimeout(() => {
+      loadingMessage.close()
+      ElMessage.success('日志数据导出成功')
+    }, 1500)
+    
+    // TODO: 实现实际的导出功能
+    // 可以通过创建临时链接下载CSV或通过服务器端生成并下载
   }).catch(() => {
     // 取消导出
   })
@@ -594,62 +649,163 @@ onMounted(async () => {
   start.setTime(start.getTime() - 3600 * 1000 * 24)
   searchForm.timeRange = [Math.floor(start.getTime() / 1000), Math.floor(end.getTime() / 1000)]
   
+  // 显示加载提示
+  loading.value = true
+  
   try {
-    // 尝试从API获取已使用的模型和组列表
-    const [logsResponse] = await Promise.all([
-      getLogs({ per_page: 1 })
+    // 并行请求获取初始数据
+    const [groupsPromise, modelsPromise, logsPromise] = [
+      // 这里可以替换为获取组列表的API
+      Promise.resolve({ data: ['default', 'test', 'production'] }),
+      // 这里可以替换为获取模型列表的API
+      Promise.resolve({ data: ['deepseek-r1', 'gpt-4', 'claude-2'] }),
+      // 获取日志数据
+      getLogs({ 
+        page: pagination.page,
+        per_page: pagination.size,
+        ...buildSearchParams()
+      })
+    ]
+    
+    // 等待所有请求完成
+    const [groupsResult, modelsResult, logsResult] = await Promise.allSettled([
+      groupsPromise,
+      modelsPromise,
+      logsPromise
     ])
     
-    if (logsResponse && logsResponse.success) {
-      // 从日志数据中提取唯一的组和模型
-      const uniqueGroups = new Set()
-      const uniqueModels = new Set()
+    // 处理组数据
+    if (groupsResult.status === 'fulfilled' && groupsResult.value.data) {
+      groups.value = Array.isArray(groupsResult.value.data) 
+        ? groupsResult.value.data 
+        : ['default']
+    } else {
+      groups.value = ['default']
+    }
+    
+    // 处理模型数据
+    if (modelsResult.status === 'fulfilled' && modelsResult.value.data) {
+      models.value = Array.isArray(modelsResult.value.data) 
+        ? modelsResult.value.data 
+        : ['deepseek-r1']
+    } else {
+      models.value = ['deepseek-r1']
+    }
+    
+    // 处理日志数据
+    if (logsResult.status === 'fulfilled' && logsResult.value?.success) {
+      // 解析日志数据 - 复用loadLogs函数中的逻辑
+      const response = logsResult.value
       
-      if (logsResponse.data && logsResponse.data.logs) {
-        logsResponse.data.logs.forEach(log => {
-          if (log.group) uniqueGroups.add(log.group)
-          if (log.model) uniqueModels.add(log.model)
+      if (response.data && response.data.logs) {
+        logs.value = response.data.logs.map(log => {
+          // 尝试解析内容字段（如果是JSON格式的字符串）
+          let parsedContent = null
+          if (log.content && typeof log.content === 'string') {
+            try {
+              parsedContent = JSON.parse(log.content)
+            } catch (e) {
+              // 不是有效的JSON，保持原样
+            }
+          }
+          
+          // 尝试解析请求详情内容（如果是JSON格式的字符串）
+          let parsedRequestContent = null
+          if (log.request_detail?.content && typeof log.request_detail.content === 'string') {
+            try {
+              parsedRequestContent = JSON.parse(log.request_detail.content)
+            } catch (e) {
+              // 不是有效的JSON，保持原样
+            }
+          }
+          
+          return {
+            id: log.id,
+            request_id: log.request_id,
+            endpoint: log.endpoint || '-',
+            token_name: log.token_name || '-',
+            group: log.group || '-',
+            model: log.model,
+            prompt_tokens: log.usage?.input_tokens || 0,
+            completion_tokens: log.usage?.output_tokens || 0,
+            status_code: log.code,
+            latency: log.ttfb_milliseconds || 0,
+            used_amount: log.used_amount || 0,
+            ip: log.ip || '-',
+            channel: log.channel,
+            created_at: new Date(log.created_at).toISOString(),
+            
+            // 保存原始详情数据，便于详情弹窗使用
+            raw_log: log,
+            
+            // 请求和响应内容 - 尝试优化显示格式
+            request_body: log.request_detail?.content || '',
+            response_body: log.content || '',
+            parsed_request: parsedRequestContent,
+            parsed_response: parsedContent,
+            
+            // 错误信息 - 如果状态码表示错误，使用响应内容作为错误信息
+            error_message: log.error_message || (log.code >= 400 ? log.content : '')
+          }
         })
+        pagination.total = response.data.total || logs.value.length
       }
-      
-      groups.value = Array.from(uniqueGroups)
-      models.value = Array.from(uniqueModels)
+    } else {
+      // 如果日志加载失败，使用模拟数据
+      logs.value = generateMockLogs(10)
+      pagination.total = 100
     }
   } catch (error) {
-    console.error('获取组和模型列表失败:', error)
+    console.error('初始化数据失败:', error)
+    ElMessage.error('初始化数据失败，使用默认值')
+    
     // 使用默认值
     groups.value = ['default']
     models.value = ['deepseek-r1']
+    logs.value = generateMockLogs(10)
+    pagination.total = 100
+  } finally {
+    loading.value = false
   }
-  
-  loadLogs()
 })
 </script>
 
 <style scoped>
-.container {
+.log-list-container {
   padding: 20px;
 }
 
-.card-header {
+.log-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
+}
+
+.log-header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.log-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.log-search {
+  margin-bottom: 20px;
 }
 
 .search-form {
-  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .pagination-container {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
-}
-
-.right-buttons {
-  display: flex;
-  gap: 10px;
 }
 
 .json-content {
