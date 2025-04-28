@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  # Build frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - aiproxy-network
+
+  # Backend service
+  backend:
+    image: ghcr.io/labring/aiproxy:v0.1.7  # Please replace with the actual backend image
+    environment:
+      - ADMIN_KEY=aiproxy  # Please replace with the secure admin key
+      # Add more backend environment variables here
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data  # Persistent data storage
+    networks:
+      - aiproxy-network
+
+networks:
+  aiproxy-network:
+    driver: bridge 
