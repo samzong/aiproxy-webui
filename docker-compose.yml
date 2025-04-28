@@ -3,9 +3,7 @@ version: '3'
 services:
   # Build frontend
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/samzong/aiproxy-ui:latest
     ports:
       - "80:80"
     depends_on:
